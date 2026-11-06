@@ -737,15 +737,14 @@ return module.exports; })();
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px 22px 18px;
-  background: var(--dsw-alias-bg-layer-1);
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 14px;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 .tp-timebar {
-  height: 3px;
+  height: 2px;
   border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-2);
+  background: transparent;
   overflow: hidden;
 }
 .tp-timebar-fill {
@@ -754,28 +753,31 @@ return module.exports; })();
   background: var(--dsw-alias-brand-primary);
   transition: width 120ms linear;
 }
-.tp-board-wrap {
-  position: relative;
-  border-radius: 10px;
-  cursor: text;
-}
-.tp-board-wrap:focus-within, .tp-seg-btn:focus-visible, .tp-btn:focus-visible {
+.tp-board-wrap { position: relative; cursor: text; }
+.tp-card:focus-within .tp-focus-hint { color: var(--dsw-alias-label-primary); text-decoration: underline; text-underline-offset: 3px; }
+.tp-seg-btn:focus-visible, .tp-btn:focus-visible {
   outline: 2px solid var(--dsw-alias-label-primary);
   outline-offset: 3px;
 }
 .tp-viewport {
-  /* Extend the clipping boundary without changing text width or line breaks. */
+  --tp-row: 1.85em;
+  --tp-viewport-mask: linear-gradient(to bottom, transparent, rgba(0,0,0,.45) calc(.5 * var(--tp-row)),
+    #000 var(--tp-row), #000 calc(4 * var(--tp-row)), rgba(0,0,0,.42) calc(5 * var(--tp-row)), transparent calc(6 * var(--tp-row)));
+  /* One faded history row, current + two clear rows, then two fading rows. */
   margin-inline: -16px;
   padding-inline: 16px;
-  height: calc(4 * 1.85em + 4px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
+  height: calc(6 * var(--tp-row));
+  overflow: hidden;
+  overflow-anchor: none;
+  scroll-behavior: auto;
+  -webkit-mask-image: var(--tp-viewport-mask);
+  mask-image: var(--tp-viewport-mask);
   font-size: 21px;
   line-height: 1.85;
 }
 .tp-board {
-  padding: 2px;
+  /* Lead/trailing room keeps the current row pinned at the start AND end. */
+  padding: var(--tp-row) 2px calc(4 * var(--tp-row));
   white-space: pre-wrap;
   overflow-wrap: break-word;
   font-family: var(--tp-font-mono);
@@ -845,11 +847,11 @@ return module.exports; })();
   font-size: 16px;
   line-height: 24px;
 }
-/* The visible board provides the focus ring; the IME anchor must stay invisible. */
+/* The blue caret and focus hint show focus; the IME anchor stays invisible. */
 .tp-input:focus { outline: none; }
-.tp-ime .tp-viewport { height: calc(3 * 2.7em + 4px); line-height: 2.7; }
+.tp-ime .tp-viewport { --tp-row: 2.7em; line-height: 2.7; }
 .tp-ime .tp-board { font-family: inherit; letter-spacing: 0.1em; }
-.tp-annotated .tp-board { padding-top: 12px; letter-spacing: 0; }
+.tp-annotated .tp-board { letter-spacing: 0; }
 .tp-ruby { ruby-align: center; margin-inline: 0.12em; line-height: 1; }
 .tp-ruby .tp-char { display: inline-block; min-width: 1em; text-align: center; line-height: 1.2; }
 .tp-ruby rt {
@@ -1036,19 +1038,32 @@ return module.exports; })();
 
     function revealCaret(viewport) {
       if (!viewport) return;
-      const caret = viewport.querySelector('.tp-char.caret');
-      if (!caret) return;
-      const bounds = viewport.getBoundingClientRect();
-      const cursor = caret.getBoundingClientRect();
+      const caret = viewport.querySelector('[data-input-anchor]');
+      const first = viewport.querySelector('.tp-char');
+      if (!caret || !first) return;
       const lineHeight = parseFloat(window.getComputedStyle(viewport).lineHeight);
-      const top = cursor.top - bounds.top - viewport.clientTop;
-      const bottom = cursor.bottom - bounds.top - viewport.clientTop;
-      // Keep a line of context above and below the cursor; scroll only this
-      // viewport so typing never moves the page or the surrounding DSH shell.
-      if (top < lineHeight || bottom > viewport.clientHeight - lineHeight) {
-        const first = viewport.querySelector('.tp-char').getBoundingClientRect();
-        const row = Math.round((cursor.top - first.top) / lineHeight);
-        viewport.scrollTop = Math.max(0, (row - 1) * lineHeight);
+      if (!Number.isFinite(lineHeight) || lineHeight <= 0) return;
+      // Align every new row immediately, including backtracking and the last
+      // row. The board's padding reserves one history row and four future rows.
+      // Rounding ignores mixed-script glyph/reading offsets within one line.
+      const row = Math.max(0, Math.round((caret.getBoundingClientRect().top - first.getBoundingClientRect().top) / lineHeight));
+      const offset = row * lineHeight;
+      if (Math.abs(viewport.scrollTop - offset) > .5) viewport.scrollTop = offset;
+    }
+
+    function revealInputRegion(viewport) {
+      const caret = viewport?.querySelector('[data-input-anchor]');
+      if (!caret) return;
+      const host = viewport.closest?.('.tp-root')?.getBoundingClientRect();
+      const top = Math.max(12, host?.top ?? 0);
+      const bottom = Math.min(window.innerHeight - 12, host?.bottom ?? window.innerHeight);
+      const region = viewport.getBoundingClientRect();
+      // Reveal the six-row region once on focus/resize if a small host clips
+      // it. During ordinary typing only revealCaret moves the inner text.
+      const fits = region.bottom - region.top <= bottom - top;
+      const rect = fits ? region : caret.getBoundingClientRect();
+      if (rect.top < top || rect.bottom > bottom) {
+        viewport.parentElement.scrollIntoView({ block: fits ? 'nearest' : 'center' });
       }
     }
 
@@ -1393,7 +1408,7 @@ return module.exports; })();
         const resize = () => {
           revealCaret(viewport);
           if (document.activeElement === inputRef.current) {
-            viewport.parentElement.scrollIntoView({ block: 'nearest' });
+            revealInputRegion(viewport);
           }
           position();
         };
@@ -1988,7 +2003,7 @@ return module.exports; })();
                   setFocused(true);
                   void prepareSound();
                   revealCaret(viewportRef.current);
-                  event.currentTarget.parentElement.scrollIntoView({ block: 'nearest' });
+                  revealInputRegion(viewportRef.current);
                   position();
                 },
                 onBlur: () => { setFocused(false); stopSound(); },
@@ -2020,7 +2035,7 @@ return module.exports; })();
                   key, className: 'tp-status-size', 'aria-hidden': true,
                 }, t(key))),
                 h('span', { className: 'tp-focus-hint', id: 'tp-start-hint',
-                  style: { visibility: result || !inputReady() ? 'hidden' : 'visible' },
+                  style: { visibility: result || !inputReady() || session.startAt != null ? 'hidden' : 'visible' },
                 }, t(focused ? (isIme ? 'restartHintIme' : 'restartHint') : 'focusHint')),
                 !inputReady() ? h('div', { className: 'tp-annotation-status', role: 'status' },
                   h('span', null, t(session.annotationState === 'error' ? 'hintError' : 'hintLoading')),
