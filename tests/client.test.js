@@ -11,7 +11,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   annotate: text => Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part, i) => ({
     char: part.segment, reading: 'hint', wordStart: i, wordEnd: i + 1,
   })),
-})) {
+}), apiFetch, transportFetch) {
   const hooks = [];
   const timers = new Set();
   const storage = new Map(Object.entries(initialStorage));
@@ -24,6 +24,8 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   let tree;
   let pendingEffects;
   let dirty;
+  let nextPassage = null;
+  const requests = [];
   const React = {
     createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
     memo: (component) => component,
@@ -52,7 +54,13 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   };
   React.useLayoutEffect = React.useEffect;
   const context = vm.createContext({
+    AbortController, URLSearchParams, setTimeout, clearTimeout,
+    fetch: (url, options) => {
+      requests.push({ url, options });
+      return apiFetch ? apiFetch(url, options) : Promise.resolve({ ok: true, json: async () => ({ candidate: nextPassage, reason: 'empty' }) });
+    },
     window: {
+      __DSH_TRANSPORT__: transportFetch ? { fetch: transportFetch } : undefined,
       __ModuleLoader__: { load: (module) => { factory = module.factory; } },
       localStorage: {
         getItem: (key) => storage.get(key) ?? null,
@@ -166,6 +174,20 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       render();
     },
     async settle() { await new Promise(resolve => setImmediate(resolve)); render(); },
+    async usePassage(text, language = 'en') {
+      nextPassage = { text, language, source: { sessionId: 'fixture', seq: 5, role: 'user', fingerprint: 'a'.repeat(64), title: '示例对话' } };
+      const local = find(node => node.type === 'button' && node.children[0] === '本地对话语料');
+      if (local.props['aria-pressed']) await find(node => node.type === 'button' && node.props.className === 'tp-btn tp-corpus-next').props.onClick();
+      else { local.props.onClick(); render(); await new Promise(resolve => setImmediate(resolve)); }
+      render();
+    },
+    builtin() { find(node => node.type === 'button' && node.children[0] === '默认语料').props.onClick(); render(); },
+    source(label) { find(node => node.type === 'button' && node.children[0] === label).props.onClick(); render(); },
+    sourceSelected: label => find(node => node.type === 'button' && node.children[0] === label).props['aria-pressed'],
+    preferenceError: () => Boolean(find(node => node.props.className === 'tp-corpus-note tp-preference-error')),
+    nextPassage() { const promise = find(node => node.type === 'button' && node.props.className === 'tp-btn tp-corpus-next').props.onClick(); render(); return promise; },
+    requests,
+    corpusMessage: () => find(node => node.props.className === 'tp-corpus-note')?.children[0] || undefined,
     restart() {
       find((node) => node.type === 'button' && node.props.className === 'tp-btn primary').props.onClick();
       render();
@@ -621,4 +643,150 @@ test('turning hints off permits practice while an earlier load is pending', asyn
   assert.equal(app.board().hints, 'off');
   assert.equal(app.board().typed.length, 1);
   assert.equal(app.readOnly(), false);
+});
+
+test('conversation passage runs beyond timed duration and completes once without writing timed bests', async () => {
+  const app = mountClient();
+  await app.usePassage('A short passage.');
+  assert.equal(app.board().text, 'A short passage.');
+  app.input('A', 1000); app.tick(61000);
+  assert.equal(app.finished(), false);
+  assert.equal(app.stat('用时'), 60);
+  app.input('A short passage.', 62000);
+  assert.equal(app.finished(), true);
+  assert.deepEqual(app.saved(), {});
+  app.restart();
+  assert.equal(app.board().text, 'A short passage.');
+  assert.equal(app.inputValue(), '');
+  await app.builtin();
+  assert.ok(app.board().text.length >= 1200);
+  assert.equal(app.stat('剩余'), 30);
+});
+
+test('conversation selection and hint changes isolate old IME while retaining the chosen original', async () => {
+  const app = mountClient(); app.language('中文');
+  app.compose('Start', '', '', 1000); app.compose('Update', 'ni', 'ni', 1001);
+  const old = app.staleInput();
+  await app.usePassage('你好，周末。', 'zh'); old('旧文字');
+  assert.equal(app.inputValue(), ''); assert.equal(app.board().text, '你好，周末。');
+  app.hints('current'); await app.settle();
+  assert.equal(app.board().text, '你好，周末。');
+  app.input('你好，周末。', 2000);
+  assert.equal(app.finished(), true); assert.deepEqual(app.saved('zh', 'current'), {});
+  app.language('粤语');
+  assert.notEqual(app.board().text, '你好，周末。'); assert.equal(app.stat('剩余'), 30);
+});
+
+test('default source does not request history; local selection uses language and retains preference after fallback', async () => {
+  const app = mountClient();
+  assert.equal(app.requests.length, 0);
+  app.language('粤语');
+  await app.nextPassage();
+  assert.equal(app.requests.length, 0);
+  app.source('本地对话语料'); await app.settle();
+  assert.match(app.requests[0].url, /language=yue/);
+  assert.ok(app.board().text.length >= 1200);
+  assert.match(app.corpusMessage(), /未找到/);
+  assert.equal(app.sourceSelected('本地对话语料'), true);
+  await app.nextPassage(); await app.settle();
+  assert.equal(app.requests.length, 2);
+});
+
+test('failed recent-history request falls back to built-in text without affecting saved scores', async () => {
+  const app = mountClient(undefined, {}, false, undefined, async () => { throw new Error('network failure'); });
+  app.source('本地对话语料'); await app.settle();
+  assert.ok(app.board().text.length >= 1200);
+  assert.match(app.corpusMessage(), /暂不可用/);
+  assert.deepEqual(app.saved(), {});
+});
+
+test('language change aborts an old local read and selects a passage in the new language', async () => {
+  const resolutions = [];
+  const app = mountClient(undefined, {}, false, undefined, () => new Promise(done => { resolutions.push(done); }));
+  app.source('本地对话语料');
+  app.language('中文', 'current');
+  assert.equal(app.requests[0].options.signal.aborted, true);
+  assert.match(app.requests[1].url, /language=zh/);
+  const target = app.board().text;
+  resolutions[0]({ ok: true, json: async () => ({ candidate: { language: 'en', text: 'Late old text.', source: { sessionId: 'old' } } }) });
+  await app.settle();
+  assert.equal(app.board().text, target);
+  resolutions[1]({ ok: true, json: async () => ({ candidate: { language: 'zh', text: '新的中文片段。', source: { sessionId: 'new' } } }) });
+  await app.settle();
+  assert.equal(app.board().text, '新的中文片段。');
+  assert.equal(app.corpusMessage(), undefined);
+});
+
+test('selection button cancels an ongoing read and preserves the current run', async () => {
+  let resolve;
+  const app = mountClient(undefined, {}, false, undefined, () => new Promise(done => { resolve = done; }));
+  app.source('本地对话语料');
+  const target = app.board().text;
+  await app.nextPassage();
+  assert.equal(app.requests[0].options.signal.aborted, true);
+  resolve({ ok: true, json: async () => ({ candidate: null, reason: 'empty' }) });
+  await app.settle();
+  assert.equal(app.board().text, target);
+  assert.equal(app.corpusMessage(), undefined);
+});
+
+test('desktop uses the authenticated carrier instead of fetching its static app origin', async () => {
+  const calls = [];
+  const app = mountClient(undefined, {}, false, undefined, () => { throw new Error('Static origin must not be used'); }, async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, json: async () => ({ candidate: { language: 'en', text: 'A local passage.', source: { sessionId: 'desktop' } } }) };
+  });
+  app.source('本地对话语料'); await app.settle();
+  assert.equal(app.requests.length, 0);
+  assert.match(calls[0].url, /^\/api\/typing-practice\/recent\?language=en/);
+  assert.equal(app.board().text, 'A local passage.');
+});
+
+test('source preference survives remount without persisting conversation text or changing best scores', async () => {
+  const preferenceKey = 'dsh.typing-practice.preferences.v1';
+  const app = mountClient();
+  await app.usePassage('Private passage content.');
+  const stored = app.rawStorage(preferenceKey);
+  assert.deepEqual(JSON.parse(stored), { version: 1, source: 'local' });
+  const restored = mountClient(undefined, { [preferenceKey]: stored });
+  assert.equal(restored.sourceSelected('本地对话语料'), true);
+  await restored.settle();
+  assert.equal(restored.requests.length, 1);
+  assert.match(restored.corpusMessage(), /未找到/);
+  restored.builtin();
+  assert.equal(restored.sourceSelected('默认语料'), true);
+  const again = mountClient(undefined, { [preferenceKey]: restored.rawStorage(preferenceKey) });
+  await again.nextPassage();
+  assert.equal(again.requests.length, 0);
+  assert.deepEqual(again.saved(), {});
+});
+
+test('switching to default source aborts a local read and ignores its late response', async () => {
+  let resolve;
+  const app = mountClient(undefined, {}, false, undefined, () => new Promise(done => { resolve = done; }));
+  app.source('本地对话语料');
+  app.builtin();
+  assert.equal(app.requests[0].options.signal.aborted, true);
+  const target = app.board().text;
+  resolve({ ok: true, json: async () => ({ candidate: { language: 'en', text: 'Late local text.', source: { sessionId: 'old' } } }) });
+  await app.settle();
+  assert.equal(app.board().text, target);
+  assert.equal(app.sourceSelected('默认语料'), true);
+  assert.equal(app.corpusMessage(), undefined);
+  await app.nextPassage();
+  assert.equal(app.requests.length, 1);
+});
+
+test('invalid saved preferences default safely and unavailable storage does not prevent source switching', async () => {
+  const key = 'dsh.typing-practice.preferences.v1';
+  for (const value of ['{', 'null', '{"version":2,"source":"local"}', '{"version":1,"source":"unknown"}']) {
+    const app = mountClient(undefined, { [key]: value });
+    assert.equal(app.sourceSelected('默认语料'), true);
+    assert.equal(app.requests.length, 0);
+  }
+  const app = mountClient(undefined, {}, true);
+  await app.usePassage('Local practice still works.');
+  assert.equal(app.board().text, 'Local practice still works.');
+  assert.equal(app.sourceSelected('本地对话语料'), true);
+  assert.equal(app.preferenceError(), true);
 });

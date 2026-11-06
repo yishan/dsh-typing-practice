@@ -1,10 +1,10 @@
-// Typing practice client half: a sidebar panel entry plus its timed typing page.
+// Typing practice client half: sidebar entry, timed practice and local passages.
 //
 // Loaded as a classic-script plugin through window.__ModuleLoader__; the only
 // external module it imports is the platform React runtime. Pronunciation
-// engines arrive as package-local DSH chunks. Practice text is generated locally,
-// timing uses performance.now(), and the
-// best scores are kept locally, separated by language and scoring rules.
+// engines arrive as package-local DSH chunks. The Host can select local conversation
+// text; timing uses performance.now(). Best scores and the source preference are
+// kept locally, separated from ephemeral conversation text.
 
 window.__ModuleLoader__.load({
   id: 'typing-practice',
@@ -14,6 +14,7 @@ window.__ModuleLoader__.load({
     const NS = 'typing-practice';
     const LEGACY_STORE_KEY = 'dsh.typing-practice.v1';
     const STORE_KEY = 'dsh.typing-practice.v2';
+    const PREFERENCES_KEY = 'dsh.typing-practice.preferences.v1';
     const LANGUAGES = ['en', 'zh', 'yue'];
     const HINT_MODES = ['off', 'current', 'all'];
     const RULES_VERSION = 2;
@@ -26,7 +27,7 @@ window.__ModuleLoader__.load({
     const zh = {
       panelLabel: '打字练习',
       panelTitle: '打字练习',
-      panelSubtitle: '限时测速，实时统计速度与准确率',
+      panelSubtitle: '实时统计速度与准确率',
       bestValue: '最佳 {speed} {unit} · {acc}%',
       legacyBestValue: '旧版最佳 {speed} WPM · {acc}%',
       bestNone: '暂无最佳记录',
@@ -69,12 +70,20 @@ window.__ModuleLoader__.load({
       restartHintIme: '开始组字即计时，上屏后判分',
       footerTip: '输入错误可退格修正；最佳成绩只保存在本机浏览器。',
       inputPlaceholder: '',
+      corpusNext: '换一段', corpusCancel: '取消选取', corpusBuiltin: '默认语料',
+      corpusSource: '语料来源', corpusLocal: '本地对话语料',
+      corpusPreferenceError: '语料来源已切换，但未能保存，下次打开时需要重新选择。',
+      corpusRecent: '近 30 天对话', corpusLoading: '正在选取近 30 天的语料…',
+      corpusEmpty: '本次未找到合适的近期语料，已使用默认语料。',
+      corpusUnavailable: '本地对话暂不可用，已使用默认语料。',
+      corpusPassage: '完成一段', corpusElapsed: '用时', corpusCompleted: '已完成 · {seconds} 秒',
+      corpusCount: '{n} 字符', corpusFooter: '片段仅用于本次练习，不保存对话正文，不计入限时最佳。',
     };
 
     const en = {
       panelLabel: 'Typing practice',
       panelTitle: 'Typing practice',
-      panelSubtitle: 'Timed runs with live speed and accuracy',
+      panelSubtitle: 'Live speed and accuracy',
       bestValue: 'Best {speed} {unit} · {acc}%',
       legacyBestValue: 'Legacy best {speed} WPM · {acc}%',
       bestNone: 'No best score yet',
@@ -117,6 +126,14 @@ window.__ModuleLoader__.load({
       restartHintIme: 'Time starts with composition; committed text is scored',
       footerTip: 'Backspace fixes mistakes; best scores stay in this browser.',
       inputPlaceholder: '',
+      corpusNext: 'New passage', corpusCancel: 'Cancel selection', corpusBuiltin: 'Built-in text',
+      corpusSource: 'Text source', corpusLocal: 'Local conversations',
+      corpusPreferenceError: 'Text source changed but could not be saved. Select it again next time.',
+      corpusRecent: 'Conversations · past 30 days', corpusLoading: 'Choosing text from the past 30 days…',
+      corpusEmpty: 'No suitable recent text found. Using built-in text.',
+      corpusUnavailable: 'Local history is unavailable. Using built-in text.',
+      corpusPassage: 'Complete a passage', corpusElapsed: 'Elapsed', corpusCompleted: 'Completed · {seconds}s',
+      corpusCount: '{n} characters', corpusFooter: 'Passage text stays in this practice only and is excluded from timed best scores.',
     };
 
     const dictionaries = { zh, en };
@@ -308,15 +325,30 @@ window.__ModuleLoader__.load({
       }
     }
 
+    function loadCorpusPreference() {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem(PREFERENCES_KEY) || '{}');
+        return stored?.version === 1 && stored.source === 'local' ? 'local' : 'builtin';
+      } catch { return 'builtin'; }
+    }
+
+    function saveCorpusPreference(source) {
+      try {
+        window.localStorage.setItem(PREFERENCES_KEY, JSON.stringify({ version: 1, source }));
+        return true;
+      } catch { return false; }
+    }
+
     // ---------- session engine ----------
 
     let nextSessionId = 0;
-    function createSession(duration, language = 'en', hints = language === 'en' ? 'off' : 'current', originalText) {
+    function createSession(duration, language = 'en', hints = language === 'en' ? 'off' : 'current', originalText, source = null) {
       const text = originalText || practiceText(language);
       return {
         id: ++nextSessionId,
         language,
         hints,
+        source,
         annotations: null,
         annotationState: hints === 'off' ? 'off' : 'loading',
         duration,
@@ -361,7 +393,7 @@ window.__ModuleLoader__.load({
 
     function finishSession(session, elapsed) {
       const raw = elapsed != null ? elapsed : sessionElapsed(session);
-      const ms = Math.max(1, Math.min(raw, session.duration * 1000));
+      const ms = Math.max(1, session.source ? raw : Math.min(raw, session.duration * 1000));
       const correct = countCorrect(session.text, session.typed);
       const accuracy = session.keystrokes > 0
         ? (session.keystrokes - session.wrongKeys) / session.keystrokes
@@ -372,7 +404,7 @@ window.__ModuleLoader__.load({
           speed: Math.round((correct / (session.language === 'en' ? 5 : 1)) / (ms / 60000)),
           language: session.language,
           hints: session.hints,
-          eligible: ms >= session.duration * 1000,
+          eligible: !session.source && ms >= session.duration * 1000,
           accuracy: Math.max(0, Math.min(1, accuracy)),
           correct,
           keystrokes: session.keystrokes,
@@ -386,7 +418,7 @@ window.__ModuleLoader__.load({
 
     function checkDeadline(session, now) {
       if (session.result) return session;
-      if (session.startAt != null && now - session.startAt >= session.duration * 1000) {
+      if (!session.source && session.startAt != null && now - session.startAt >= session.duration * 1000) {
         return finishSession({ ...session, nowMs: now }, now - session.startAt);
       }
       return session;
@@ -430,6 +462,7 @@ window.__ModuleLoader__.load({
   font-size: 13px;
   line-height: 1.5;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 .tp-root, .tp-root * { box-sizing: border-box; }
 .tp-panel-spark { stroke: var(--dsw-alias-brand-primary); }
@@ -477,10 +510,13 @@ window.__ModuleLoader__.load({
 .tp-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   flex-wrap: wrap;
 }
+.tp-duration-slot { display: grid; }
+.tp-duration-slot > * { grid-area: 1 / 1; }
+.tp-passage-mode { display: flex; align-items: center; padding: 0 14px; color: var(--dsw-alias-label-secondary); font-size: 12.5px; }
 .tp-seg {
   display: inline-flex;
   gap: 2px;
@@ -496,6 +532,7 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-secondary);
   font-family: inherit;
   font-size: 12.5px;
+  font-weight: 500;
   min-height: 44px;
   min-width: 44px;
   padding: 0 14px;
@@ -506,25 +543,36 @@ window.__ModuleLoader__.load({
 .tp-seg-btn.active {
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
-  font-weight: 600;
-}
-.tp-toolbar-hint {
-  font-size: 11.5px;
-  color: var(--dsw-alias-label-secondary);
 }
 .tp-hint-control { display: inline-flex; align-items: center; gap: 8px; color: var(--dsw-alias-label-secondary); }
+.tp-select { position: relative; display: inline-flex; }
 .tp-hint-control select {
+  appearance: none;
+  -webkit-appearance: none;
   min-height: 44px;
   max-width: 100%;
-  padding: 0 10px;
+  padding: 0 36px 0 12px;
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 8px;
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font: inherit;
+  cursor: pointer;
 }
-.tp-hint-control select:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 3px; }
+.tp-select-chevron { position: absolute; right: 12px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%); pointer-events: none; }
+.tp-hint-control select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .tp-annotation-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--dsw-alias-label-secondary); }
+.tp-corpus-bar { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; }
+.tp-corpus-status { display: grid; flex: 1 1 260px; min-width: 0; min-height: 36px; align-items: center; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.tp-corpus-status > *, .tp-instructions > * { grid-area: 1 / 1; margin: 0; overflow-wrap: anywhere; }
+.tp-status-size { visibility: hidden; pointer-events: none; user-select: none; }
+.tp-corpus-name { font-variant-numeric: tabular-nums; }
+.tp-corpus-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-left: auto; }
+.tp-corpus-controls .tp-seg-btn { padding: 0 10px; }
+.tp-btn.tp-corpus-next { display: grid; justify-items: center; }
+.tp-corpus-next > * { grid-area: 1 / 1; }
+.tp-corpus-note { margin: 0; font-size: 12px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.tp-corpus-note:empty { pointer-events: none; }
 .tp-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -585,7 +633,7 @@ window.__ModuleLoader__.load({
   cursor: text;
 }
 .tp-board-wrap:focus-within, .tp-seg-btn:focus-visible, .tp-btn:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: 2px solid var(--dsw-alias-label-primary);
   outline-offset: 3px;
 }
 .tp-viewport {
@@ -664,16 +712,8 @@ window.__ModuleLoader__.load({
 }
 .tp-save-error { color: var(--dsw-alias-state-error-primary); }
 .tp-focus-hint {
-  position: absolute;
-  right: 8px;
-  bottom: 6px;
-  padding: 2px 10px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-overlay);
   color: var(--dsw-alias-label-secondary);
   font-size: 11.5px;
-  pointer-events: none;
 }
 .tp-result {
   display: flex;
@@ -717,7 +757,9 @@ window.__ModuleLoader__.load({
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
-.tp-actions { display: flex; justify-content: flex-end; }
+.tp-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.tp-instructions { display: grid; min-width: 0; flex: 1; font-size: 11.5px; line-height: 18px; }
+.tp-actions > .tp-btn { flex: none; }
 .tp-btn {
   display: inline-flex;
   align-items: center;
@@ -759,6 +801,8 @@ window.__ModuleLoader__.load({
   .tp-title { font-size: 18px; }
   .tp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tp-viewport { font-size: 18px; }
+  .tp-corpus-controls { order: -1; }
+  .tp-corpus-status { min-height: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tp-seg-btn, .tp-timebar-fill { transition: none; }
@@ -905,6 +949,11 @@ window.__ModuleLoader__.load({
       const [saveError, setSaveError] = React.useState(false);
       const [hintPreference, setHintPreference] = React.useState('current');
       const [annotationAttempt, setAnnotationAttempt] = React.useState(0);
+      const [corpusBusy, setCorpusBusy] = React.useState(false);
+      const [corpusMessage, setCorpusMessage] = React.useState('');
+      const [corpusPreference, setCorpusPreference] = React.useState(loadCorpusPreference);
+      const [corpusPreferenceError, setCorpusPreferenceError] = React.useState(false);
+      const corpusRequest = React.useRef(null);
       const [legacyBest] = React.useState(loadLegacyBest);
       const [caretIndex, setCaretIndex] = React.useState(0);
       const [composition, setComposition] = React.useState({ active: false, text: '' });
@@ -987,7 +1036,7 @@ window.__ModuleLoader__.load({
             if (previous.startAt == null || previous.result) return previous;
             const now = performance.now();
             const elapsed = now - previous.startAt;
-            if (elapsed >= previous.duration * 1000) {
+            if (!previous.source && elapsed >= previous.duration * 1000) {
               return finishSession({ ...previous, nowMs: now }, elapsed);
             }
             return { ...previous, nowMs: now };
@@ -1024,11 +1073,76 @@ window.__ModuleLoader__.load({
         setIsRecord(true);
       }, [session.result]);
 
-      function restart(nextDuration, focus = false, language = session.language, hints = language === 'en' ? 'off' : hintPreference, originalText) {
+      React.useEffect(() => () => { corpusRequest.current?.abort(); corpusRequest.current = null; }, []);
+
+      // A remembered local source also applies when the page is reopened or
+      // the practice language changes. Fallback never changes this preference.
+      React.useEffect(() => {
+        if (corpusPreference === 'local') nextPassage(false);
+      }, [corpusPreference, session.language]);
+
+      function changeCorpusPreference(source) {
+        if (!['builtin', 'local'].includes(source) || source === corpusPreference) return;
+        restart(session.duration, false, session.language, session.hints, undefined, null);
+        setCorpusPreference(source);
+        setCorpusPreferenceError(!saveCorpusPreference(source));
+      }
+
+      function cancelCorpus() {
+        corpusRequest.current?.abort(); corpusRequest.current = null;
+        setCorpusBusy(false); setCorpusMessage('');
+      }
+
+      async function nextPassage(focus = true) {
+        if (corpusRequest.current) { cancelCorpus(); return; }
+        if (corpusPreference === 'builtin') {
+          restart(session.duration, focus, session.language, session.hints, undefined, null);
+          return;
+        }
+        const controller = new AbortController();
+        corpusRequest.current = controller;
+        const current = sessionRef.current;
+        setCorpusBusy(true); setCorpusMessage('');
+        let timeout;
+        const deadline = new Promise((_, reject) => {
+          timeout = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 12000);
+        });
+        let candidate = null;
+        let fallback = 'corpusEmpty';
+        try {
+          const params = new URLSearchParams({ language: current.language, exclude: current.source?.fingerprint || '' });
+          // Desktop owns an authenticated carrier; relative global fetch there
+          // addresses the static dsh-app page rather than its Host API.
+          const transport = window.__DSH_TRANSPORT__;
+          const send = transport?.fetch ? transport.fetch.bind(transport) : fetch;
+          const body = await Promise.race([deadline, (async () => {
+            const response = await send('/api/typing-practice/recent?' + params, { signal: controller.signal, cache: 'no-store' });
+            if (!response.ok) throw new Error('unavailable');
+            return response.json();
+          })()]);
+          const item = body.candidate;
+          if (item && item.language === current.language && typeof item.text === 'string' && item.text.length > 0
+            && item.text.length <= 3000 && item.source?.sessionId) candidate = item;
+          if (!candidate && !['empty', 'limited'].includes(body.reason)) fallback = 'corpusUnavailable';
+        } catch { fallback = 'corpusUnavailable'; }
+        finally { clearTimeout(timeout); }
+        if (corpusRequest.current !== controller || sessionRef.current.id !== current.id) return;
+        corpusRequest.current = null;
+        setCorpusBusy(false);
+        if (candidate) {
+          restart(current.duration, focus, current.language, current.hints, candidate.text, candidate.source);
+        } else {
+          restart(current.duration, focus, current.language, current.hints, undefined, null);
+          setCorpusMessage(fallback);
+        }
+      }
+
+      function restart(nextDuration, focus = false, language = session.language, hints = language === 'en' ? 'off' : hintPreference, originalText, source = language === session.language ? session.source : null) {
+        cancelCorpus();
         const duration = nextDuration || session.duration;
         // Change the epoch before blurring. Some IMEs commit on blur; that
         // commit belongs to the old input node and must not enter the new run.
-        updateSession(() => createSession(duration, language, hints, originalText));
+        updateSession(() => createSession(duration, language, hints, originalText || (source ? session.text : undefined), source));
         if (inputRef.current) inputRef.current.blur();
         compositionRef.current = { active: false, anchor: 0 };
         setComposition({ active: false, text: '' });
@@ -1142,7 +1256,7 @@ window.__ModuleLoader__.load({
       const speedUnit = t(isIme ? 'statsCpm' : 'statsWpm');
       const shownAccuracy = Math.round((result ? result.accuracy : stats.accuracy) * 100);
       const remaining = Math.max(0, Math.ceil((session.duration * 1000 - stats.ms) / 1000));
-      const progress = Math.max(0, Math.min(1, stats.ms / (session.duration * 1000)));
+      const progress = Math.max(0, Math.min(1, session.source ? characters(session.typed).length / session.target.length : stats.ms / (session.duration * 1000)));
       const bestForDuration = best[recordKey(session.language, session.duration, session.hints)] || null;
       const legacy = !isIme && legacyBest[session.duration];
 
@@ -1153,13 +1267,38 @@ window.__ModuleLoader__.load({
               h('h1', { className: 'tp-title' }, t('panelTitle')),
               h('p', { className: 'tp-subtitle' }, t('panelSubtitle')),
             ),
-            h('div', { className: 'tp-best' },
-              bestForDuration
+            h('div', { className: 'tp-best', style: { visibility: session.source ? 'hidden' : 'visible' } },
+              session.source ? t('corpusPassage') : bestForDuration
                 ? t('bestValue', { speed: bestForDuration.speed, unit: speedUnit, acc: Math.round(bestForDuration.accuracy * 100) })
                 : legacy && Number.isFinite(legacy.wpm) && Number.isFinite(legacy.accuracy)
                   ? t('legacyBestValue', { speed: legacy.wpm, acc: Math.round(legacy.accuracy * 100) }) : t('bestNone'),
             ),
           ),
+          h('div', { className: 'tp-corpus-bar' },
+            h('div', { className: 'tp-corpus-status' },
+              // Invisible size guides keep translated/wrapped status text from
+              // moving the controls or practice area when a request settles.
+              ['corpusLoading', 'corpusEmpty', 'corpusUnavailable'].map(key => h('span', {
+                key, className: 'tp-status-size', 'aria-hidden': true,
+              }, t(key))),
+              h('span', { className: 'tp-corpus-name', title: session.source?.title || undefined,
+                style: { visibility: corpusBusy || corpusMessage ? 'hidden' : 'visible' },
+              }, session.source ? t('corpusRecent') + ' · ' + t('corpusCount', { n: session.target.length }) : ''),
+              h('p', { className: 'tp-corpus-note', role: 'status', 'aria-atomic': true }, corpusBusy || corpusMessage ? t(corpusBusy ? 'corpusLoading' : corpusMessage) : ''),
+            ),
+            h('div', { className: 'tp-corpus-controls' },
+              h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('corpusSource') },
+                ['builtin', 'local'].map(source => h('button', {
+                  key: source, type: 'button',
+                  className: 'tp-seg-btn' + (source === corpusPreference ? ' active' : ''),
+                  'aria-pressed': source === corpusPreference,
+                  onClick: () => changeCorpusPreference(source),
+                }, t(source === 'builtin' ? 'corpusBuiltin' : 'corpusLocal')))),
+              h('button', { type: 'button', className: 'tp-btn tp-corpus-next', onClick: () => nextPassage() },
+                h('span', null, t(corpusBusy ? 'corpusCancel' : 'corpusNext')),
+                h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusNext')),
+                h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusCancel')),
+              ))),
           h('div', { className: 'tp-toolbar' },
             h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('languageLabel') },
               LANGUAGES.map((language) => h('button', {
@@ -1170,18 +1309,24 @@ window.__ModuleLoader__.load({
                 onClick: () => restart(session.duration, false, language),
               }, t('language_' + language))),
             ),
-            h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('durationLabel') },
+            h('div', { className: 'tp-duration-slot' },
+              h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('durationLabel'),
+                'aria-hidden': Boolean(session.source), style: { visibility: session.source ? 'hidden' : 'visible' },
+              },
               DURATIONS.map((duration) => h('button', {
                 key: duration,
                 type: 'button',
                 className: 'tp-seg-btn' + (duration === session.duration ? ' active' : ''),
                 'aria-pressed': duration === session.duration,
+                disabled: Boolean(session.source),
                 onClick: () => restart(duration),
               }, t('durationOption', { n: duration }))),
+              ),
+              session.source ? h('span', { className: 'tp-passage-mode' }, t('corpusPassage')) : null,
             ),
             isIme ? h('label', { className: 'tp-hint-control' },
               h('span', null, t('hint_' + session.language)),
-              h('select', {
+              h('span', { className: 'tp-select' }, h('select', {
                 value: session.hints,
                 'aria-label': t('hint_' + session.language),
                 title: t('hintChange'),
@@ -1192,24 +1337,16 @@ window.__ModuleLoader__.load({
                   restart(session.duration, false, session.language, hints, session.text);
                 },
               }, HINT_MODES.map(mode => h('option', { key: mode, value: mode }, t('hint_' + mode)))),
+                h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false },
+                  h('path', { d: 'M3 4.5 6 7.5 9 4.5' })),
+              ),
             ) : null,
-            h('span', { className: 'tp-toolbar-hint', id: 'tp-start-hint' }, t(isIme ? 'restartHintIme' : 'restartHint')),
           ),
-          !inputReady() ? h('div', { className: 'tp-annotation-status', role: 'status' },
-            h('span', null, t(session.annotationState === 'error' ? 'hintError' : 'hintLoading')),
-            session.annotationState === 'error' ? h('button', {
-              className: 'tp-btn', type: 'button',
-              onClick: () => {
-                updateSession(previous => ({ ...previous, annotationState: 'loading' }));
-                setAnnotationAttempt(attempt => attempt + 1);
-              },
-            }, t('hintRetry')) : null,
-          ) : null,
           h('div', { className: 'tp-stats' },
             h(Stat, { label: speedUnit, value: shownSpeed, accent: true, description: isIme ? t('cpmTip') : undefined }),
             h(Stat, { label: t('statsAccuracy'), value: shownAccuracy, unit: t('unitPercent') }),
             h(Stat, { label: t('statsErrors'), value: result ? result.wrongKeys : session.wrongKeys }),
-            h(Stat, { label: t('statsRemaining'), value: remaining, unit: t('unitSeconds') }),
+            h(Stat, { label: t(session.source ? 'corpusElapsed' : 'statsRemaining'), value: session.source ? Math.floor(stats.ms / 1000) : remaining, unit: t('unitSeconds') }),
           ),
           h('div', { className: 'tp-card' },
             h('div', {
@@ -1264,11 +1401,10 @@ window.__ModuleLoader__.load({
               composition.active && composition.text ? h('div', {
                 className: 'tp-composition', ref: previewRef, 'aria-hidden': true,
               }, composition.text) : null,
-              (!focused && !result) ? h('div', { className: 'tp-focus-hint' }, t('focusHint')) : null,
             ),
             result ? h('div', { className: 'tp-result', role: 'status', 'aria-live': 'polite' },
               h('div', { className: 'tp-result-title' },
-                h('span', null, result.eligible ? t('resultTitle') : t('resultEarly', { seconds: (result.elapsedMs / 1000).toFixed(1) })),
+                h('span', null, session.source ? t('corpusCompleted', { seconds: (result.elapsedMs / 1000).toFixed(1) }) : result.eligible ? t('resultTitle') : t('resultEarly', { seconds: (result.elapsedMs / 1000).toFixed(1) })),
                 isRecord ? h('span', { className: 'tp-record' }, t('newRecordBadge')) : null,
               ),
               h('div', { className: 'tp-result-grid' },
@@ -1279,6 +1415,24 @@ window.__ModuleLoader__.load({
               ),
             ) : null,
             h('div', { className: 'tp-actions' },
+              h('div', { className: 'tp-instructions' },
+                ['focusHint', 'restartHint', 'restartHintIme', 'hintLoading'].map(key => h('span', {
+                  key, className: 'tp-status-size', 'aria-hidden': true,
+                }, t(key))),
+                h('span', { className: 'tp-focus-hint', id: 'tp-start-hint',
+                  style: { visibility: result || !inputReady() ? 'hidden' : 'visible' },
+                }, t(focused ? (isIme ? 'restartHintIme' : 'restartHint') : 'focusHint')),
+                !inputReady() ? h('div', { className: 'tp-annotation-status', role: 'status' },
+                  h('span', null, t(session.annotationState === 'error' ? 'hintError' : 'hintLoading')),
+                  session.annotationState === 'error' ? h('button', {
+                    className: 'tp-btn', type: 'button',
+                    onClick: () => {
+                      updateSession(previous => ({ ...previous, annotationState: 'loading' }));
+                      setAnnotationAttempt(attempt => attempt + 1);
+                    },
+                  }, t('hintRetry')) : null,
+                ) : null,
+              ),
               h('button', {
                 type: 'button',
                 className: 'tp-btn primary',
@@ -1287,7 +1441,8 @@ window.__ModuleLoader__.load({
             ),
           ),
           h('div', { className: 'tp-foot' },
-            h('span', null, t('footerTip')),
+            h('span', null, t(session.source ? 'corpusFooter' : 'footerTip')),
+            corpusPreferenceError ? h('span', { className: 'tp-corpus-note tp-preference-error', role: 'status' }, t('corpusPreferenceError')) : null,
             saveError ? h('span', { className: 'tp-save-error', role: 'status' }, t('storageError')) : null,
           ),
         ),

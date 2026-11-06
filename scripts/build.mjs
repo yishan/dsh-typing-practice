@@ -16,10 +16,10 @@ for (const name of ['pinyin', 'jyutping']) {
   await writeFile(resolve(root, chunk), wrapper);
   console.log(`${chunk}: ${Buffer.byteLength(wrapper)} bytes`);
 }
-let notices = '# Third-party notices\n\nPronunciation engines are bundled locally in their respective client chunks. Practice passages are authored in this project.\n';
-for (const name of ['pinyin-pro', 'to-jyutping']) {
+let notices = '# Third-party notices\n\nPronunciation engines are bundled locally in their respective client chunks. Built-in practice passages are authored in this project. The Host uses mdast-util-from-markdown to parse selected conversation text; it and its dependencies retain their licenses in node_modules.\n';
+for (const name of ['pinyin-pro', 'to-jyutping', 'mdast-util-from-markdown']) {
   const manifest = JSON.parse(await readFile(resolve(root, `node_modules/${name}/package.json`), 'utf8'));
-  const license = await readFile(resolve(root, `node_modules/${name}/LICENSE`), 'utf8');
+  const license = await readFile(resolve(root, `node_modules/${name}/${name === 'mdast-util-from-markdown' ? 'license' : 'LICENSE'}`), 'utf8');
   notices += `\n## ${name} ${manifest.version}\n\n${manifest.repository.url}\n\n${license}\n`;
 }
 await writeFile(resolve(root, 'THIRD_PARTY_NOTICES.md'), notices.trimEnd() + '\n');

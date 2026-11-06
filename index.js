@@ -1,8 +1,8 @@
-// Typing practice host half.
-//
-// The practice runs entirely in the browser: text generation, timing and the
-// best score all live in the Client half. This row exists so the bundle mounts
-// as a plugin and its Client module is discovered; it has no services and no
-// configuration.
+import { registerCorpusRoutes } from './src/corpus-routes.js';
 
-export function apply() {}
+// Use the Host's authenticated, owner-only Fetch channel and current-profile
+// session service. A click selects recent prose; unavailable history falls back
+// to built-in practice in the Client.
+export function apply(ctx) {
+  ctx.inject(['connection'], connectionCtx => registerCorpusRoutes(connectionCtx));
+}
