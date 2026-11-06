@@ -600,15 +600,13 @@ return module.exports; })();
 }
 .tp-root, .tp-root * { box-sizing: border-box; }
 .tp-panel-spark { stroke: var(--dsw-alias-brand-primary); }
-.tp-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
-/* Reserve matching classic-scrollbar gutters so both content widths align. */
-.tp-scroll, .tp-stats-dock { scrollbar-gutter: stable both-edges; }
-.tp-stats-dock { flex: none; overflow: hidden; background: var(--dsw-alias-bg-base); }
+.tp-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable both-edges; }
 .tp-page {
   width: 100%;
   max-width: 880px;
+  min-height: 100%;
   margin: 0 auto;
-  padding: 26px 30px 28px;
+  padding: 26px 30px max(32px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -655,6 +653,8 @@ return module.exports; })();
   font-variant-numeric: tabular-nums;
 }
 .tp-toolbar {
+  margin-top: auto;
+  padding-top: 24px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -724,9 +724,8 @@ return module.exports; })();
 .tp-corpus-note:empty { pointer-events: none; }
 .tp-stats {
   width: 100%;
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 0 30px max(32px, env(safe-area-inset-bottom));
+  margin: 16px 0 -2px;
+  padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
@@ -762,7 +761,7 @@ return module.exports; })();
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
   padding: 0;
   background: transparent;
   border: 0;
@@ -1055,9 +1054,9 @@ return module.exports; })();
   color: var(--dsw-alias-label-secondary);
 }
 @media (max-width: 720px) {
-  .tp-page { padding: 18px 14px 28px; }
+  .tp-page { padding: 18px 14px max(32px, env(safe-area-inset-bottom)); }
   .tp-title { font-size: 18px; }
-  .tp-stats { padding-inline: 14px; gap: 8px; }
+  .tp-stats { gap: 8px; }
   .tp-stat-value { font-size: 22px; }
   .tp-viewport { font-size: 18px; }
   .tp-records-header, .tp-records-toolbar, .tp-records-footer { padding-left: 14px; padding-right: 14px; }
@@ -2008,34 +2007,11 @@ return module.exports; })();
                 title: running ? t('settingsRunning') : undefined, 'aria-haspopup': 'dialog', onClick: openSettings }, t('settings')),
             ),
           ),
-          h('div', { className: 'tp-toolbar' },
-            h('div', { className: 'tp-practice-options' },
-            h('div', { className: 'tp-seg tp-practice-controls' },
-              h('div', { className: 'tp-language', role: 'group', 'aria-label': t('languageLabel') },
-                LANGUAGES.map((language) => h('button', {
-                  key: language,
-                  type: 'button',
-                  className: 'tp-seg-btn' + (language === session.language ? ' active' : ''),
-                  'aria-pressed': language === session.language,
-                  onClick: () => restart(session.duration, false, language),
-                }, t('language_' + language))),
-              ),
-              h('div', { className: 'tp-exercise', role: 'radiogroup', 'aria-label': t('exerciseLabel') },
-                [...DURATIONS.map(String), ...PracticeCorpus.TEXT_LENGTHS].map((preset, index) => h('button', {
-                  key: preset, type: 'button', role: 'radio',
-                  className: 'tp-seg-btn' + (preset === exercisePreference.preset ? ' active' : ''),
-                  'aria-checked': preset === exercisePreference.preset, tabIndex: preset === exercisePreference.preset ? 0 : -1,
-                  onKeyDown: event => exerciseKeyDown(event, index), onClick: () => changeExercise(preset),
-                }, PracticeCorpus.TEXT_LENGTHS.includes(preset) ? t('length_' + preset) : t('durationOption', { n: preset }))))),
-            ),
-            h('div', { className: 'tp-corpus-controls' },
-              h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('corpusSource') },
-                ['builtin', 'local'].map(source => h('button', {
-                  key: source, type: 'button',
-                  className: 'tp-seg-btn' + (source === corpusPreference ? ' active' : ''),
-                  'aria-pressed': source === corpusPreference,
-                  onClick: () => changeCorpusPreference(source),
-                }, t(source === 'builtin' ? 'corpusBuiltin' : 'corpusLocal'))))),
+          h('div', { className: 'tp-stats', role: 'group', 'aria-label': t('liveStats') },
+            h(Stat, { label: speedUnit, value: shownSpeed, accent: true, description: isIme ? t('cpmTip') : undefined }),
+            h(Stat, { label: t('statsAccuracy'), value: shownAccuracy, unit: t('unitPercent') }),
+            h(Stat, { label: t('statsErrors'), value: result ? result.wrongKeys : session.wrongKeys }),
+            h(Stat, { label: t(isPassage ? 'corpusElapsed' : 'statsRemaining'), value: isPassage ? Math.floor(stats.ms / 1000) : remaining, unit: t('unitSeconds') }),
           ),
           h('div', { className: 'tp-card' },
             h('div', {
@@ -2149,6 +2125,35 @@ return module.exports; })();
                   h('span', { className: 'tp-shortcut-tip', id: 'tp-restart-shortcut', role: 'tooltip' }, 'Esc'))),
             ),
           ),
+          h('div', { className: 'tp-toolbar' },
+            h('div', { className: 'tp-practice-options' },
+            h('div', { className: 'tp-seg tp-practice-controls' },
+              h('div', { className: 'tp-language', role: 'group', 'aria-label': t('languageLabel') },
+                LANGUAGES.map((language) => h('button', {
+                  key: language,
+                  type: 'button',
+                  className: 'tp-seg-btn' + (language === session.language ? ' active' : ''),
+                  'aria-pressed': language === session.language,
+                  onClick: () => restart(session.duration, false, language),
+                }, t('language_' + language))),
+              ),
+              h('div', { className: 'tp-exercise', role: 'radiogroup', 'aria-label': t('exerciseLabel') },
+                [...DURATIONS.map(String), ...PracticeCorpus.TEXT_LENGTHS].map((preset, index) => h('button', {
+                  key: preset, type: 'button', role: 'radio',
+                  className: 'tp-seg-btn' + (preset === exercisePreference.preset ? ' active' : ''),
+                  'aria-checked': preset === exercisePreference.preset, tabIndex: preset === exercisePreference.preset ? 0 : -1,
+                  onKeyDown: event => exerciseKeyDown(event, index), onClick: () => changeExercise(preset),
+                }, PracticeCorpus.TEXT_LENGTHS.includes(preset) ? t('length_' + preset) : t('durationOption', { n: preset }))))),
+            ),
+            h('div', { className: 'tp-corpus-controls' },
+              h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('corpusSource') },
+                ['builtin', 'local'].map(source => h('button', {
+                  key: source, type: 'button',
+                  className: 'tp-seg-btn' + (source === corpusPreference ? ' active' : ''),
+                  'aria-pressed': source === corpusPreference,
+                  onClick: () => changeCorpusPreference(source),
+                }, t(source === 'builtin' ? 'corpusBuiltin' : 'corpusLocal'))))),
+          ),
           exerciseSaveError || corpusPreferenceError || saveError ? h('div', { className: 'tp-foot' },
             exerciseSaveError ? h('span', { className: 'tp-corpus-note tp-preference-error', role: 'status' }, t('exerciseSaveError')) : null,
             corpusPreferenceError ? h('span', { className: 'tp-corpus-note tp-preference-error', role: 'status' }, t('corpusPreferenceError')) : null,
@@ -2157,14 +2162,6 @@ return module.exports; })();
           renderRecords(),
           renderSettings(),
         )),
-        h('div', { className: 'tp-stats-dock' },
-          h('div', { className: 'tp-stats', role: 'group', 'aria-label': t('liveStats') },
-            h(Stat, { label: speedUnit, value: shownSpeed, accent: true, description: isIme ? t('cpmTip') : undefined }),
-            h(Stat, { label: t('statsAccuracy'), value: shownAccuracy, unit: t('unitPercent') }),
-            h(Stat, { label: t('statsErrors'), value: result ? result.wrongKeys : session.wrongKeys }),
-            h(Stat, { label: t(isPassage ? 'corpusElapsed' : 'statsRemaining'), value: isPassage ? Math.floor(stats.ms / 1000) : remaining, unit: t('unitSeconds') }),
-          ),
-        ),
       );
     }
 
