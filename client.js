@@ -2,8 +2,8 @@
 //
 // Loaded as a classic-script plugin through window.__ModuleLoader__; the only
 // external module it imports is the platform React runtime. Pronunciation
-// engines arrive as package-local DSH chunks. The Host can select local conversation
-// text; timing uses performance.now(). Best scores and the source preference are
+// engines and keyboard recordings arrive as package-local DSH chunks. The Host can select local conversation
+// text; timing uses performance.now(). Records and preferences are
 // kept locally, separated from ephemeral conversation text.
 
 window.__ModuleLoader__.load({
@@ -17,6 +17,8 @@ window.__ModuleLoader__.load({
     const RECORDS_KEY = 'dsh.typing-practice.v3';
     const HISTORY_LIMIT = 100;
     const PREFERENCES_KEY = 'dsh.typing-practice.preferences.v1';
+    const SOUND_KEY = 'dsh.typing-practice.sound.v1';
+    const SOUND_PACKS = ['off', 'mxblue', 'mxbrown', 'cream', 'holypanda'];
     const LANGUAGES = ['en', 'zh', 'yue'];
     const HINT_MODES = ['off', 'current', 'all'];
     const RULES_VERSION = 2;
@@ -94,6 +96,12 @@ window.__ModuleLoader__.load({
       compareTimed: '此前最佳 {speed} {unit} · {acc}% · 本次 {delta} {unit}',
       comparePassage: '近期同篇最佳 {speed} {unit} · {acc}% · 本次 {delta} {unit}',
       newPassageRecord: '同篇新纪录',
+      sound: '音效', soundTitle: '键盘音效', soundClose: '关闭音效设置', soundPack: '声音', soundVolume: '音量', soundPreview: '试听',
+      sound_off: '关闭', sound_mxblue: 'Cherry MX Blue · 青轴', sound_mxbrown: 'Cherry MX Brown · 茶轴',
+      sound_cream: 'NovelKeys Cream · 奶油轴', sound_holypanda: 'Holy Panda · 圣熊猫',
+      soundRunning: '完成或重新开始后可设置音效', soundLoading: '正在准备音效…',
+      soundError: '音效暂不可用，可点击试听重试。练习不受影响。', soundSaveError: '音效选项未能保存，下次打开可能需要重新选择。',
+      soundCredit: '录音：kbsim / Thomas Lai · MIT',
     };
 
     const en = {
@@ -164,6 +172,12 @@ window.__ModuleLoader__.load({
       compareTimed: 'Previous best {speed} {unit} · {acc}% · This run {delta} {unit}',
       comparePassage: 'Recent same-passage best {speed} {unit} · {acc}% · This run {delta} {unit}',
       newPassageRecord: 'New passage best',
+      sound: 'Sound', soundTitle: 'Keyboard sounds', soundClose: 'Close sound settings', soundPack: 'Sound', soundVolume: 'Volume', soundPreview: 'Preview',
+      sound_off: 'Off', sound_mxblue: 'Cherry MX Blue', sound_mxbrown: 'Cherry MX Brown',
+      sound_cream: 'NovelKeys Cream', sound_holypanda: 'Holy Panda',
+      soundRunning: 'Finish or restart this run to change sounds', soundLoading: 'Preparing sounds…',
+      soundError: 'Sound is unavailable. Preview to retry. Practice still works.', soundSaveError: 'Sound settings could not be saved. You may need to choose again next time.',
+      soundCredit: 'Recordings: kbsim / Thomas Lai · MIT',
     };
 
     const dictionaries = { zh, en };
@@ -427,6 +441,18 @@ window.__ModuleLoader__.load({
       } catch { return false; }
     }
 
+    function loadSoundPreference() {
+      const saved = readStored(SOUND_KEY);
+      return { version: 1, pack: saved?.version === 1 && SOUND_PACKS.includes(saved.pack) ? saved.pack : 'off',
+        volume: saved?.version === 1 && Number.isFinite(saved.volume) ? Math.max(0, Math.min(100, Math.round(saved.volume))) : 30 };
+    }
+
+    let audioModule;
+    function loadAudioModule() {
+      if (!audioModule) audioModule = require.async('./client.audio.js').catch(error => { audioModule = null; throw error; });
+      return audioModule;
+    }
+
     // ---------- session engine ----------
 
     let nextSessionId = 0;
@@ -636,7 +662,7 @@ window.__ModuleLoader__.load({
 }
 .tp-hint-control { display: inline-flex; align-items: center; gap: 8px; color: var(--dsw-alias-label-secondary); }
 .tp-select { position: relative; display: inline-flex; }
-.tp-hint-control select, .tp-records-filter select {
+.tp-hint-control select, .tp-records-filter select, .tp-sound-field select {
   appearance: none;
   -webkit-appearance: none;
   min-height: 44px;
@@ -650,7 +676,7 @@ window.__ModuleLoader__.load({
   cursor: pointer;
 }
 .tp-select-chevron { position: absolute; right: 12px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%); pointer-events: none; }
-.tp-hint-control select:focus-visible, .tp-records-filter select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
+.tp-hint-control select:focus-visible, .tp-records-filter select:focus-visible, .tp-sound-field select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .tp-annotation-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--dsw-alias-label-secondary); }
 .tp-corpus-bar { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; }
 .tp-corpus-status { display: grid; flex: 1 1 260px; min-width: 0; min-height: 36px; align-items: center; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
@@ -907,6 +933,16 @@ window.__ModuleLoader__.load({
 .tp-clear-confirm h3 { margin-top: 0; }
 .tp-clear-confirm p { color: var(--dsw-alias-label-secondary); }
 .tp-clear-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+.tp-sound-dialog { width: min(440px, calc(100vw - 32px)); height: fit-content; }
+.tp-sound-body { padding: 4px 20px 20px; overflow-y: auto; }
+.tp-sound-field { display: grid; gap: 8px; margin-bottom: 18px; font-size: 13px; }
+.tp-sound-field .tp-select, .tp-sound-field select { width: 100%; min-width: 0; }
+.tp-sound-volume { display: flex; align-items: center; gap: 16px; }
+.tp-sound-volume input { flex: 1; min-width: 0; min-height: 44px; margin: 0; accent-color: var(--dsw-alias-label-primary); }
+.tp-sound-volume output { width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.tp-sound-status { display: grid; margin: 10px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.tp-sound-status > span { grid-area: 1 / 1; }
+.tp-sound-credit { font-size: 11px; color: var(--dsw-alias-label-secondary); text-underline-offset: 3px; }
 .tp-foot {
   display: flex;
   justify-content: space-between;
@@ -1081,6 +1117,15 @@ window.__ModuleLoader__.load({
       const recordsShowAllRef = React.useRef(null);
       const clearCancelRef = React.useRef(null);
       const clearButtonRef = React.useRef(null);
+      const [soundPreference, setSoundPreference] = React.useState(loadSoundPreference);
+      const soundPreferenceRef = React.useRef(soundPreference);
+      const [soundOpen, setSoundOpen] = React.useState(false);
+      const [soundStatus, setSoundStatus] = React.useState('idle');
+      const [soundSaveError, setSoundSaveError] = React.useState(false);
+      const soundDialogRef = React.useRef(null);
+      const soundButtonRef = React.useRef(null);
+      const soundCloseRef = React.useRef(null);
+      const audioRef = React.useRef({ context: null, player: null, pack: null, preparing: null, epoch: 0, disposed: false, status: 'idle' });
       const [focused, setFocused] = React.useState(false);
       const [saveError, setSaveError] = React.useState(false);
       const [hintPreference, setHintPreference] = React.useState('current');
@@ -1122,6 +1167,110 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (clearConfirm) clearCancelRef.current?.focus();
       }, [clearConfirm]);
+
+      React.useLayoutEffect(() => {
+        const dialog = soundDialogRef.current;
+        if (!dialog) return;
+        if (soundOpen && !dialog.open) { dialog.showModal(); soundCloseRef.current?.focus(); }
+        else if (!soundOpen && dialog.open) { dialog.close(); soundButtonRef.current?.focus({ preventScroll: true }); }
+      }, [soundOpen]);
+
+      function stopSound() {
+        audioRef.current.epoch++;
+        audioRef.current.player?.stop();
+      }
+
+      function audioStatus(status) {
+        if (audioRef.current.disposed) return;
+        audioRef.current.status = status;
+        setSoundStatus(status);
+      }
+
+      async function prepareSound(preview = false) {
+        const state = audioRef.current;
+        const settings = soundPreferenceRef.current;
+        if (state.disposed || settings.pack === 'off' || !settings.volume) return false;
+        const epoch = state.epoch;
+        let context;
+        try {
+          // Construct/resume synchronously in the click, focus or key gesture.
+          if (!state.context) {
+            const Audio = window.AudioContext || window.webkitAudioContext;
+            if (!Audio) throw new Error('Web Audio unavailable');
+            state.context = new Audio({ latencyHint: 'interactive' });
+          }
+          context = state.context;
+          const resumed = context.state === 'running' ? Promise.resolve() : context.resume();
+          // Handle rejection immediately, even while the local chunk is loading.
+          const resumeResult = Promise.resolve(resumed).then(() => true, () => false);
+          if (!state.player) {
+            audioStatus('loading');
+            const module = await loadAudioModule();
+            if (state.disposed || state.context !== context) return false;
+            if (!state.player) state.player = module.createAudioPlayer(context, module.samples, status => {
+              if (state.context === context) audioStatus(status);
+            });
+          }
+          if (state.disposed || state.context !== context || settings.pack !== soundPreferenceRef.current.pack) return false;
+          state.player.setVolume(soundPreferenceRef.current.volume);
+          if (state.pack !== settings.pack || state.status === 'error') {
+            state.pack = settings.pack;
+            state.preparing = state.player.select(settings.pack);
+          }
+          const ready = await state.preparing;
+          const resumedOk = await resumeResult;
+          if (state.disposed || state.context !== context || settings.pack !== soundPreferenceRef.current.pack) return false;
+          if (!resumedOk || context.state !== 'running') { audioStatus('error'); return false; }
+          if (preview && ready && epoch === state.epoch && !document.hidden) return state.player.preview();
+          return Boolean(ready);
+        } catch { if (!context || state.context === context) audioStatus('error'); return false; }
+      }
+
+      function changeSound(patch) {
+        const next = { ...soundPreferenceRef.current, ...patch };
+        if (!SOUND_PACKS.includes(next.pack) || !Number.isFinite(next.volume)) return;
+        next.volume = Math.max(0, Math.min(100, Math.round(next.volume)));
+        soundPreferenceRef.current = next; setSoundPreference(next);
+        stopSound();
+        try { window.localStorage.setItem(SOUND_KEY, JSON.stringify(next)); setSoundSaveError(false); }
+        catch { setSoundSaveError(true); }
+        const state = audioRef.current;
+        state.player?.setVolume(next.volume);
+        if (next.pack === 'off') {
+          state.pack = 'off'; state.player?.select('off'); audioStatus('idle');
+        } else if (next.volume) void prepareSound();
+      }
+
+      function playKeySound(event, input) {
+        const current = sessionRef.current;
+        const state = audioRef.current;
+        if (document.hidden || document.activeElement !== event.currentTarget || current.result || !inputReady()
+          || !current.source && current.startAt != null && performance.now() - current.startAt >= current.duration * 1000
+          || event.repeat || input.repeat || event.ctrlKey || event.metaKey || event.altKey
+          || soundPreferenceRef.current.pack === 'off' || !soundPreferenceRef.current.volume) return;
+        const key = event.key;
+        const composing = compositionRef.current.active || input.isComposing || event.isComposing || input.keyCode === 229;
+        if (!(key?.length === 1 || ['Backspace', 'Delete', 'Process', 'Unidentified'].includes(key) || key === 'Enter' && composing)) return;
+        const kind = key === ' ' || input.code === 'Space' ? 'space' : key === 'Backspace' || key === 'Delete' ? 'backspace' : key === 'Enter' ? 'enter' : 'generic';
+        if (state.player && state.context.state === 'running' && state.status === 'ready' && state.pack === soundPreferenceRef.current.pack) state.player.play(kind);
+        else if (state.status !== 'error') void prepareSound(); // Drop unready keystrokes, never replay a burst.
+      }
+
+      React.useEffect(() => {
+        const state = audioRef.current;
+        state.disposed = false;
+        const hidden = () => { if (document.hidden) stopSound(); };
+        document.addEventListener('visibilitychange', hidden);
+        window.addEventListener('blur', stopSound);
+        return () => {
+          state.disposed = true; stopSound();
+          document.removeEventListener('visibilitychange', hidden);
+          window.removeEventListener('blur', stopSound);
+          if (state.player) state.player.dispose();
+          else if (state.context) { try { Promise.resolve(state.context.close()).catch(() => {}); } catch { /* Already closed. */ } }
+          state.player = null; state.context = null; state.pack = null;
+        };
+      }, []);
 
       React.useLayoutEffect(() => {
         if (viewportRef.current) viewportRef.current.scrollTop = 0;
@@ -1195,6 +1344,7 @@ window.__ModuleLoader__.load({
         }
         if (handledResultRef.current === result) return;
         handledResultRef.current = result;
+        stopSound();
         const entry = historyEntry(session);
         const previous = recordsRef.current;
         const key = recordKey(result.language, result.duration, result.hints);
@@ -1215,6 +1365,7 @@ window.__ModuleLoader__.load({
       function openRecords() {
         const current = sessionRef.current;
         if (current.startAt != null && !current.result || compositionRef.current.active) return;
+        stopSound();
         cancelCorpus();
         setRecordsPassage(null);
         setClearConfirm(false); setClearError(false); setRecordsOpen(true);
@@ -1302,6 +1453,7 @@ window.__ModuleLoader__.load({
       }
 
       function restart(nextDuration, focus = false, language = session.language, hints = language === 'en' ? 'off' : hintPreference, originalText, source = language === session.language ? session.source : null) {
+        stopSound();
         cancelCorpus();
         const duration = nextDuration || session.duration;
         // Change the epoch before blurring. Some IMEs commit on blur; that
@@ -1398,6 +1550,7 @@ window.__ModuleLoader__.load({
         if (event.key === 'Tab') return;
         if (!inputReady()) { event.preventDefault(); return; }
         const input = nativeEvent(event);
+        playKeySound(event, input);
         // React's keyboard event and the browser's native event can disagree
         // at the edges of a composition. Let the IME own candidate keys.
         if (compositionRef.current.active || input.isComposing || event.isComposing || input.keyCode === 229) return;
@@ -1419,6 +1572,33 @@ window.__ModuleLoader__.load({
           h('span', { className: 'tp-record-speed' }, speed),
           h('span', { className: 'tp-record-unit' }, t(language === 'en' ? 'statsWpm' : 'statsCpm')),
           h('p', { className: 'tp-record-meta' }, t('statsAccuracy') + ' ' + Math.round(accuracy * 100) + '%'));
+      }
+
+      function closeSound() { stopSound(); setSoundOpen(false); }
+
+      function renderSound() {
+        const props = { className: 'tp-records-dialog tp-sound-dialog', ref: soundDialogRef, onClose: closeSound };
+        if (!soundOpen) return h('dialog', props);
+        return h('dialog', { ...props, 'aria-labelledby': 'tp-sound-title',
+          onCancel: event => { event.preventDefault(); closeSound(); }, onKeyDown: event => event.stopPropagation() },
+          h('div', { className: 'tp-records-header' }, h('h2', { id: 'tp-sound-title' }, t('soundTitle')),
+            h('button', { className: 'tp-btn', type: 'button', ref: soundCloseRef, onClick: closeSound, 'aria-label': t('soundClose') }, '×')),
+          h('div', { className: 'tp-sound-body' },
+            h('label', { className: 'tp-sound-field' }, h('span', null, t('soundPack')),
+              h('span', { className: 'tp-select' }, h('select', { value: soundPreference.pack, 'aria-label': t('soundPack'), onChange: event => changeSound({ pack: event.currentTarget.value }) },
+                SOUND_PACKS.map(pack => h('option', { key: pack, value: pack }, t('sound_' + pack)))),
+                h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false }, h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
+            h('label', { className: 'tp-sound-field' }, h('span', null, t('soundVolume')),
+              h('span', { className: 'tp-sound-volume' }, h('input', { type: 'range', min: 0, max: 100, step: 5, value: soundPreference.volume,
+                'aria-valuetext': soundPreference.volume + '%', onChange: event => changeSound({ volume: Number(event.currentTarget.value) }) }),
+              h('output', { 'aria-hidden': true }, soundPreference.volume + '%'))),
+            h('button', { className: 'tp-btn', type: 'button', disabled: soundPreference.pack === 'off' || !soundPreference.volume,
+              onClick: () => { stopSound(); void prepareSound(true); } }, t('soundPreview')),
+            h('div', { className: 'tp-sound-status' },
+              ['soundLoading', 'soundError', 'soundSaveError'].map(key => h('span', { className: 'tp-status-size', 'aria-hidden': true, key }, t(key))),
+              h('span', { role: 'status' }, soundSaveError ? t('soundSaveError') : soundStatus === 'loading' ? t('soundLoading') : soundStatus === 'error' ? t('soundError') : '')),
+            h('a', { className: 'tp-sound-credit', href: 'https://github.com/tplai/kbsim', target: '_blank', rel: 'noreferrer' }, t('soundCredit')),
+          ));
       }
 
       function renderRecords() {
@@ -1532,6 +1712,12 @@ window.__ModuleLoader__.load({
               h('button', { className: 'tp-btn', type: 'button', ref: recordsButtonRef, onClick: openRecords,
                 disabled: running, title: running ? t('recordsRunning') : undefined, 'aria-haspopup': 'dialog',
               }, t('records')),
+              h('button', { className: 'tp-btn', type: 'button', ref: soundButtonRef, disabled: running,
+                title: running ? t('soundRunning') : undefined, 'aria-haspopup': 'dialog', onClick: () => {
+                  const current = sessionRef.current;
+                  if (current.startAt != null && !current.result || compositionRef.current.active) return;
+                  cancelCorpus(); stopSound(); setSoundOpen(true);
+                } }, t('sound')),
             ),
           ),
           h('div', { className: 'tp-corpus-bar' },
@@ -1652,11 +1838,12 @@ window.__ModuleLoader__.load({
                 onSelect: (event) => { if (currentEvent()) updateCaret(event.currentTarget); },
                 onFocus: (event) => {
                   setFocused(true);
+                  void prepareSound();
                   revealCaret(viewportRef.current);
                   event.currentTarget.parentElement.scrollIntoView({ block: 'nearest' });
                   position();
                 },
-                onBlur: () => setFocused(false),
+                onBlur: () => { setFocused(false); stopSound(); },
               }),
               composition.active && composition.text ? h('div', {
                 className: 'tp-composition', ref: previewRef, 'aria-hidden': true,
@@ -1711,6 +1898,7 @@ window.__ModuleLoader__.load({
             saveError ? h('span', { className: 'tp-save-error', role: 'status' }, t('storageError')) : null,
           ),
           renderRecords(),
+          renderSound(),
         ),
       );
     }

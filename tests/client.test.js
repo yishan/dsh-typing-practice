@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import { createAudioPlayer } from '../src/audio-player.js';
+import { audioHarness, samplePacks } from './helpers/audio-context.js';
 
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
 
@@ -11,7 +13,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   annotate: text => Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part, i) => ({
     char: part.segment, reading: 'hint', wordStart: i, wordEnd: i + 1,
   })),
-}), apiFetch, transportFetch) {
+}), apiFetch, transportFetch, audio = {}) {
   const hooks = [];
   const timers = new Set();
   const storage = new Map(Object.entries(initialStorage));
@@ -27,6 +29,15 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   let nextPassage = null;
   const requests = [];
   const dialogElement = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
+  const soundDialog = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
+  const listeners = new Map();
+  const addListener = (name, callback) => listeners.set(name, callback);
+  const removeListener = name => listeners.delete(name);
+  const dom = {
+    activeElement: null, hidden: false, addEventListener: addListener, removeEventListener: removeListener,
+    createElement: () => ({ setAttribute() {}, remove() {} }), head: { appendChild() {} },
+  };
+  const audioLoads = [];
   const React = {
     createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
     memo: (component) => component,
@@ -61,6 +72,8 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       return apiFetch ? apiFetch(url, options) : Promise.resolve({ ok: true, json: async () => ({ candidate: nextPassage, reason: 'empty' }) });
     },
     window: {
+      AudioContext: audio.AudioContext,
+      addEventListener: addListener, removeEventListener: removeListener,
       __DSH_TRANSPORT__: transportFetch ? { fetch: transportFetch } : undefined,
       __ModuleLoader__: { load: (module) => { factory = module.factory; } },
       localStorage: {
@@ -71,10 +84,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       clearInterval: (callback) => timers.delete(callback),
     },
     performance: { now: () => now },
-    document: {
-      createElement: () => ({ setAttribute() {}, remove() {} }),
-      head: { appendChild() {} },
-    },
+    document: dom,
   });
   vm.runInContext(source, context);
   const slots = {
@@ -88,7 +98,13 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     assert.equal(name, 'react');
     return React;
   };
-  require.async = loadChunk;
+  require.async = name => {
+    if (name === './client.audio.js') {
+      audioLoads.push(name);
+      return audio.load ? audio.load() : Promise.resolve({ createAudioPlayer, samples: samplePacks });
+    }
+    return loadChunk(name);
+  };
   factory(require).apply({ get: (name) => ({ slots, locale })[name], effect: (callback) => callback() });
 
   function render() {
@@ -102,10 +118,12 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       const input = find((node) => node.type === 'textarea');
       if (inputKey !== input.props.key) {
         inputKey = input.props.key;
-        inputElement = { value: '', selectionEnd: 0, blur() {}, focus() {} };
+        inputElement = { value: '', selectionEnd: 0, blur() {}, focus() {}, parentElement: { scrollIntoView() {} } };
+        dom.activeElement = inputElement;
       }
       input.props.ref.current = inputElement;
       find(node => node.type === 'dialog').props.ref.current = dialogElement;
+      find(node => node.type === 'dialog' && node.props.className.includes('tp-sound-dialog')).props.ref.current = soundDialog;
       for (const effect of pendingEffects) effect();
     } while (dirty);
   }
@@ -147,6 +165,20 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       return prevented;
     },
     input: dispatchInput,
+    audioLoads,
+    openSound() { find(node => node.type === 'button' && node.children[0] === '音效').props.onClick(); render(); },
+    soundOpen: () => soundDialog.open,
+    soundPack(pack) { find(node => node.type === 'select' && node.props['aria-label'] === '声音').props.onChange({ currentTarget: { value: pack } }); render(); },
+    soundVolume(volume) { find(node => node.type === 'input' && node.props.type === 'range').props.onChange({ currentTarget: { value: volume } }); render(); },
+    previewSound() { find(node => node.type === 'button' && node.children[0] === '试听').props.onClick(); render(); },
+    closeSound() { find(node => node.type === 'dialog' && node.props.className.includes('tp-sound-dialog')).props.onCancel({ preventDefault() {} }); render(); },
+    soundMessage() { return find(node => node.props.role === 'status', find(node => node.type === 'dialog' && node.props.className.includes('tp-sound-dialog')))?.children[0]; },
+    soundPreference: () => JSON.parse(storage.get('dsh.typing-practice.sound.v1') || 'null'),
+    soundValue: () => find(node => node.type === 'select' && node.props['aria-label'] === '声音').props.value,
+    focusInput() { dom.activeElement = inputElement; find(node => node.type === 'textarea').props.onFocus({ currentTarget: inputElement }); render(); },
+    blurInput() { dom.activeElement = {}; find(node => node.type === 'textarea').props.onBlur(); render(); },
+    hide() { dom.hidden = true; listeners.get('visibilitychange')?.(); render(); },
+    unmount() { hooks.forEach(hook => hook?.dispose?.()); },
     compose(type, value, data, at) {
       now = at;
       inputElement.value = value;
@@ -960,5 +992,89 @@ test('malformed stored records are filtered and unknown text fields are removed 
   for (const invalid of ['{', 'null', '{"version":3,"history":{},"best":null,"legacy":null}']) {
     const empty = mountClient(undefined, { 'dsh.typing-practice.v3': invalid });
     empty.openRecords(); assert.match(empty.recordsText(), /完成一轮练习后/);
+  }
+});
+
+test('sounds default off, persist independently and do not create audio on page load', async () => {
+  const audio = audioHarness(); const app = mountClient(undefined, {}, false, undefined, undefined, undefined, audio);
+  app.focusInput(); app.key('a', 1000);
+  assert.equal(audio.contexts.length, 0); assert.equal(app.audioLoads.length, 0);
+  app.restart(); app.openSound(); app.soundPack('cream'); app.soundVolume(45); await app.settle();
+  assert.deepEqual(app.soundPreference(), { version: 1, pack: 'cream', volume: 45 });
+  assert.equal(app.audioLoads.length, 1); assert.equal(audio.contexts[0].sources.length, 0);
+  const restoredAudio = audioHarness();
+  const restored = mountClient(undefined, { 'dsh.typing-practice.sound.v1': JSON.stringify(app.soundPreference()) }, false, undefined, undefined, undefined, restoredAudio);
+  assert.equal(restoredAudio.contexts.length, 0); restored.openSound(); assert.equal(restored.soundValue(), 'cream');
+  restored.closeSound(); restored.focusInput(); await restored.settle(); restored.key(restored.board().text[0], 1000); restored.tick(31000);
+  restored.openRecords(); restored.recordAction('清空全部记录'); restored.recordAction('确认清空');
+  assert.deepEqual(restored.soundPreference(), { version: 1, pack: 'cream', volume: 45 });
+});
+
+test('one observable key makes one sound; IME composition and committed text do not replay characters', async () => {
+  const audio = audioHarness(); const app = mountClient(undefined, {}, false, undefined, undefined, undefined, audio);
+  app.language('中文'); app.openSound(); app.soundPack('mxblue'); await app.settle(); app.closeSound(); app.focusInput();
+  app.key('n', 1000, { isComposing: true }); app.compose('Start', '', '', 1000); app.compose('Update', 'ni', 'ni', 1100);
+  app.key('Process', 1200, { nativeEvent: { isComposing: true, keyCode: 229 } });
+  app.key(' ', 1300, { isComposing: true });
+  const count = audio.contexts[0].sources.length; assert.equal(count, 3);
+  app.compose('End', '你好', '你好', 1500); app.input('你好', 1501, 'insertText', '你好');
+  assert.equal(audio.contexts[0].sources.length, count); assert.equal(app.board().typed, '你好');
+  app.input('你好很多个字', 1600); assert.equal(audio.contexts[0].sources.length, count);
+});
+
+test('audio excludes modifiers, navigation, held repeats, unfocused input and late keys without affecting timing', async () => {
+  const audio = audioHarness(); const app = mountClient(undefined, {}, false, undefined, undefined, undefined, audio);
+  app.openSound(); app.soundPack('mxbrown'); await app.settle(); app.closeSound(); app.focusInput();
+  app.key(app.board().text[0], 1000); assert.equal(audio.contexts[0].sources.length, 1);
+  for (const key of ['Tab', 'Shift', 'ArrowLeft', 'Escape', 'Enter']) app.key(key, 1100);
+  for (const options of [{ repeat: true }, { metaKey: true }, { ctrlKey: true }, { altKey: true }]) app.key('a', 1200, options);
+  assert.equal(audio.contexts[0].sources.length, 1);
+  app.blurInput(); app.key('a', 1400); assert.equal(audio.contexts[0].sources.length, 1);
+  app.focusInput(); app.key('Backspace', 1500); assert.equal(audio.contexts[0].sources.length, 2);
+  app.key('x', 31000); assert.equal(app.finished(), true); assert.equal(audio.contexts[0].sources.length, 2);
+  assert.ok(audio.contexts[0].sources.every(source => source.stopped));
+});
+
+test('pending preview is cancelled on close and disposal; loading never queues ordinary keys', async () => {
+  let resolve;
+  const audio = { ...audioHarness(), load: () => new Promise(done => { resolve = done; }) };
+  const app = mountClient(undefined, {}, false, undefined, undefined, undefined, audio);
+  app.openSound(); app.soundPack('mxblue'); app.previewSound(); app.closeSound();
+  app.key('a', 1000); assert.equal(audio.contexts[0].sources.length, 0);
+  resolve({ createAudioPlayer, samples: samplePacks }); await app.settle();
+  assert.equal(audio.contexts[0].sources.length, 0);
+  app.key('b', 1500); assert.equal(audio.contexts[0].sources.length, 1);
+  app.unmount(); assert.equal(audio.contexts[0].closes, 1); assert.equal(audio.contexts[0].sources[0].stopped, true);
+
+  let lateResolve;
+  const delayed = { ...audioHarness(), load: () => new Promise(done => { lateResolve = done; }) };
+  const removed = mountClient(undefined, {}, false, undefined, undefined, undefined, delayed);
+  removed.openSound(); removed.soundPack('cream'); removed.previewSound(); removed.unmount();
+  lateResolve({ createAudioPlayer, samples: samplePacks }); await new Promise(done => setImmediate(done));
+  assert.equal(delayed.contexts[0].state, 'closed'); assert.equal(delayed.contexts[0].sources.length, 0);
+});
+
+test('sound errors remain local and explicit preview can retry a failed load', async () => {
+  let fail = true;
+  const audio = { ...audioHarness(), load: () => fail ? Promise.reject(new Error('Missing chunk')) : Promise.resolve({ createAudioPlayer, samples: samplePacks }) };
+  const app = mountClient(undefined, {}, false, undefined, undefined, undefined, audio);
+  app.openSound(); app.soundPack('cream'); await app.settle(); assert.match(app.soundMessage(), /音效暂不可用/);
+  fail = false; app.previewSound(); await app.settle(); assert.equal(audio.contexts[0].sources.length, 4);
+  app.closeSound(); app.key(app.board().text[0], 1000); app.tick(31000); assert.equal(app.finished(), true);
+  for (const broken of [{}, audioHarness({ resumeError: true, state: 'suspended' }), audioHarness({ decodeError: true })]) {
+    const run = mountClient(undefined, {}, false, undefined, undefined, undefined, broken);
+    run.openSound(); run.soundPack('cream'); await run.settle(); assert.match(run.soundMessage(), /音效暂不可用/);
+    run.closeSound(); run.key(run.board().text[0], 1000); run.tick(31000); assert.equal(run.finished(), true);
+  }
+});
+
+test('mute, blur and hidden page stop preview; sound preferences tolerate storage failures', async () => {
+  const audio = audioHarness(); const app = mountClient(undefined, {}, true, undefined, undefined, undefined, audio);
+  app.openSound(); app.soundPack('mxblue'); await app.settle(); assert.match(app.soundMessage(), /选项未能保存/);
+  app.previewSound(); await app.settle(); const ctx = audio.contexts[0]; assert.equal(ctx.sources.length, 4);
+  app.soundVolume(0); assert.ok(ctx.sources.every(source => source.stopped));
+  app.soundVolume(30); app.previewSound(); await app.settle(); app.hide(); assert.ok(ctx.sources.every(source => source.stopped));
+  for (const value of ['{', '{"version":1,"pack":"unknown","volume":-3}', '{"version":5,"pack":"cream","volume":60}']) {
+    const restored = mountClient(undefined, { 'dsh.typing-practice.sound.v1': value }); restored.openSound(); assert.equal(restored.soundValue(), 'off');
   }
 });

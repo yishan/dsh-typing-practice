@@ -38,6 +38,7 @@
     "README.md",
     "client.pinyin.js",
     "client.jyutping.js",
+    "client.audio.js",
     "THIRD_PARTY_NOTICES.md",
     "src/corpus.js",
     "src/corpus-routes.js"

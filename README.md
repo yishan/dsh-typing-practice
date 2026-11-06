@@ -4,9 +4,9 @@
 
 # dsh-typing-practice
 
-A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: English, Chinese and Cantonese text, recent local conversation passages, native IME input, Pinyin and Jyutping hints, live speed and accuracy, local best scores and practice history.
+A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: English, Chinese and Cantonese text, recent local conversation passages, native IME input, Pinyin and Jyutping hints, live speed and accuracy, local best scores, practice history and optional mechanical keyboard sounds.
 
-给 DeepSeek Harness Web GUI 加的「打字练习」插件：英文、中文和粤语文本练习，可选默认语料或近期本地对话，使用自己的输入法上屏，可查看拼音或粤拼提示，实时统计速度与准确率，最佳成绩和练习历史存在本机浏览器。
+给 DeepSeek Harness Web GUI 加的「打字练习」插件：英文、中文和粤语文本练习，可选默认语料或近期本地对话，使用自己的输入法上屏，可查看拼音或粤拼提示，实时统计速度与准确率，提供机械键盘音效选择，最佳成绩和练习历史存在本机浏览器。
 
 > 非官方项目，只是一个 DSH 插件 bundle（`dsh.bundle.patch` + `dsh.client`）。
 
@@ -24,8 +24,9 @@ A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai
 | 成绩 | 英文用 WPM，中文和粤语用字/分钟（CPM）；另显示准确率、正确字符和错误数 |
 | 最佳成绩 | 限时最佳按语言、时长、提示档位和规则版本分别保存；结束后与本轮之前的最佳比较 |
 | 练习历史 | 「记录」中查看最近 100 次练习和限时最佳，支持语言筛选、同篇记录及确认清空；统一保存到 `localStorage['dsh.typing-practice.v3']` |
+| 键盘音效 | 默认关闭；可选 Cherry MX Blue、Cherry MX Brown、NovelKeys Cream、Holy Panda，提供音量和试听，记住选择 |
 | 操作 | 首次有效组字或直接文字输入开始计时；上屏后判分；原生退格、选区替换；始终可见的重开按钮 |
-| 键盘导航 | `Tab` / `Shift+Tab` 依次切换记录、来源、换一段、语言、时长、注音选项、输入区与重开按钮；`Enter` / 空格激活按钮；记录窗口可用 `Esc` 关闭并恢复焦点；组字时候选操作交给输入法 |
+| 键盘导航 | `Tab` / `Shift+Tab` 依次切换记录、音效、来源、换一段、语言、时长、注音选项、输入区与重开按钮；`Enter` / 空格激活按钮；记录与音效窗口可用 `Esc` 关闭并恢复焦点；组字时候选操作交给输入法 |
 | 界面 | 中英双语，跟随 DSH locale；只用 `--dsw-alias-*` 主题 token，亮/暗色自适应 |
 
 达到所选时长时即截止，之后的文字确认和退格都不计入本轮成绩，即使浏览器尚未执行下一次计时回调。截止时仍在组字的内容不进入成绩；旧输入框迟到的组合事件不会写入重开后的新一轮。界面优先使用宿主翻译；缺少翻译时，按 `getLocale().active` 选择内置中英文文案。
@@ -50,6 +51,16 @@ A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai
 
 速度按当前正确匹配的可见字符计算：英文每五个字符折合一词；中文与粤语每个可见字符计一字，包含标点及拉丁字符。组字和选词时间计入用时。准确率按累计确认输入计算；取消组字不计错误，修正已上屏错误不抹去累计错误。使用 `Intl.Segmenter` 划分可见字符，避免把非 BMP 汉字或组合字符拆成多个计分单位。提前打完会显示实际用时，不写入完整时长最佳。
 
+### 键盘音效
+
+点击右上角「音效」，选择声音并点击「试听」，用音量滑块调整大小。默认关闭，初始音量 30%；音色和音量随选择保存。练习进行中暂时禁用设置入口，结束或重新开始后可调整。窗口沿用页面的主题、原生下拉框与焦点样式。
+
+首批四套声音来自 [kbsim](https://github.com/tplai/kbsim) 的 MIT 许可录音。每套含五个普通键变体，茶轴、奶油轴和 Holy Panda 另有空格、退格和回车录音；青轴的特殊键使用普通键录音。这些是具体键盘配置的录音，不代表所有同名轴体的声音。29 个原始 MP3 共 67,240 字节，保留原文件及校验值，构建后随本地 `client.audio.js` 分块按需加载。来源、版本和许可见 [素材说明](assets/audio/kbsim/README.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。
+
+仅练习输入区聚焦且可输入时响应按键。忽略长按自动重复、导航键和带 Ctrl／Command／Alt 的快捷键；组字期间按浏览器实际收到的按键播放，上屏一整词不会按汉字数量重复响。普通回车不播放，组字回车可使用回车录音。声音与计时、判分独立，不另加错误提示音或抬键声。失焦、切到后台、重开或结束会停止播放。
+
+音频在用户选择、试听或聚焦输入区后初始化，不在页面加载时自动播放。首次加载期间的按键不会排队补播；播放失败不影响练习，可在音效窗口中点击「试听」重试。同类应用参考和本轮验证范围见[音效验证记录](docs/validation/2026-11-06-keyboard-sounds.md)。
+
 ## 安装
 
 本插件是 DSH 的 bundle。克隆后，在 DSH 里让 agent 用 `plugin_manager` 安装**这个目录**：
@@ -68,7 +79,7 @@ plugin_manager(action: "install_bundle", target: "/absolute/path/to/dsh-typing-p
 dsh plugin --profile <profile> add /absolute/path/to/dsh-typing-practice
 ```
 
-安装后刷新 DSH Web 页面，左侧栏会出现「打字练习」。仓库包含已构建的注音文件，直接安装无需自行构建；包管理器会安装 Host 所需依赖。注音分块和本地对话接口已在 DSH `0.2.2-rc.1` 验证；缺少对话查询服务时回退到默认语料，不具备相同模块加载能力的宿主可关闭提示使用。已有本地安装更新 Host 代码后，可在插件管理页关闭再开启「打字练习」。安装是 profile 级的，该 profile 下所有会话可见；删除时用 `plugin_manager` 卸载即可。
+安装后刷新 DSH Web 页面，左侧栏会出现「打字练习」。仓库包含已构建的注音与音效文件，直接安装无需自行构建；包管理器会安装 Host 所需依赖。注音分块和本地对话接口已在 DSH `0.2.2-rc.1` 验证；缺少对话查询服务时回退到默认语料，不具备相同模块加载能力的宿主可关闭提示使用。已有本地安装更新 Host 代码后，可在插件管理页关闭再开启「打字练习」。安装是 profile 级的，该 profile 下所有会话可见；删除时用 `plugin_manager` 卸载即可。
 
 ## 数据
 
@@ -102,6 +113,8 @@ dsh plugin --profile <profile> add /absolute/path/to/dsh-typing-practice
 
 语料来源单独保存在 `dsh.typing-practice.preferences.v1`：`{"version":1,"source":"local"}` 或 `{"version":1,"source":"builtin"}`。该设置与成绩分开；无效设置回退到默认语料。保存失败会提示，下次打开时可能需要重新选择。
 
+音效单独保存在 `dsh.typing-practice.sound.v1`，例如 `{"version":1,"pack":"cream","volume":30}`；`pack` 可为 `off`、`mxblue`、`mxbrown`、`cream`、`holypanda`。清空练习记录不会清空音效选项。无效音色回退为关闭，无效音量回退为 30%。
+
 本地对话模式通过当前 DSH Host 读取当前 profile 的聊天历史，不向外部服务上传正文，不调用远程模型或翻译服务。选中的片段只留在本次页面内存中；浏览器存储仅保留来源选项、成绩统计与片段指纹，不保存对话正文、标题、会话 ID 或消息位置。没有收藏、正文缓存或跨设备同步。
 
 ## 结构
@@ -114,9 +127,11 @@ dsh-typing-practice/
 ├── client.js           # Client 半：侧边栏入口 + 练习页（手写）
 ├── client.pinyin.js    # 生成文件：拼音引擎与对齐适配
 ├── client.jyutping.js  # 生成文件：粤拼引擎与对齐适配
-├── src/               # 注音、字符对齐、词语范围、corpus.js 提取及 corpus-routes.js 接口
+├── client.audio.js     # 生成文件：音频播放器与四套按键录音
+├── assets/audio/kbsim/ # 原始录音、许可与固定版本的文件校验清单
+├── src/               # 注音、字符对齐、语料提取与接口、audio-player.js 音频播放器
 ├── scripts/build.mjs  # esbuild 打包为 DSH 异步模块
-├── tests/             # 输入、计时、记录、注音、语料提取、接口及来源记忆测试
+├── tests/             # 输入、计时、记录、注音、语料、音效及偏好记忆测试
 ├── icon.svg            # 插件图标（原创键帽）
 ├── locale/{zh,en}.json # 插件管理页的标题 / 描述
 ├── LICENSE
@@ -132,11 +147,12 @@ dsh-typing-practice/
 - `mdast-util-from-markdown` 在 Host 解析 Markdown。先过滤事件时间、来源和内容类型，再按句子边界选文；保留来源位置与指纹，接口不返回完整聊天日志。
 - `client.js` 通过 `window.__ModuleLoader__.load` 注册，React 来自页面运行时；不 import 任何 Harness Client 包。
 - 注音代码构建成两个独立的 DSH chunk，通过 `require.async` 按需加载。构建后更新主入口时间戳，使宿主刷新词库版本。
+- 音效是独立的 DSH chunk，内嵌短录音；Web Audio 解码后缓存，最多叠加八个声音。音色切换、迟到加载与卸载均取消旧播放。
 - 页面文案注册到 Client locale 服务，切换语言自动刷新。
 
 ## 开发
 
-- 改 `client.js` 后刷新页面即可；改 Host 入口或语料模块后，在插件管理页关闭再开启本插件，或重启 DSH。修改注音源码或依赖后，重新构建并一并提交生成文件与第三方声明。
+- 改 `client.js` 后刷新页面即可；改 Host 入口或语料模块后，在插件管理页关闭再开启本插件，或重启 DSH。修改注音、音频源码、录音素材或依赖后，重新构建并一并提交生成文件与第三方声明。
 - 静态检查：
 
 ```bash
@@ -145,7 +161,7 @@ node --check index.js
 python3 -m json.tool package.json > /dev/null
 ```
 
-- 安装开发依赖、构建注音分块并运行回归测试（Node 内置测试运行器）：
+- 安装开发依赖、构建注音和音效分块并运行回归测试（Node 内置测试运行器）：
 
 ```bash
 npm ci
@@ -153,9 +169,9 @@ npm run build
 npm test
 ```
 
-`npm pack` 会在打包前重新构建。运行这些开发命令需要包含 `src/`、`scripts/` 和测试文件的仓库 checkout。
+`npm pack` 会在打包前重新构建。运行这些开发命令需要包含 `src/`、`scripts/`、`assets/` 和测试文件的仓库 checkout。
 
-93 项测试覆盖截止、组字、Unicode、编辑、记录、存储、注音和分块，以及对话角色／内容过滤、30 天时间边界、Markdown 清理、完整句子长度、粤语原文识别、去重、读取预算、取消、有限段落完成、桌面请求通道、来源选择记忆和回退。记录测试覆盖去重、100 条上限、同篇隔离、旧记录迁移、清空失败与重试、正文排除和存储损坏恢复。组件测试使用受控时钟和 React hooks 替身，不包含真实 DOM 或操作系统候选窗。
+104 项测试覆盖截止、组字、Unicode、编辑、记录、存储、注音和分块，以及对话角色／内容过滤、30 天时间边界、Markdown 清理、完整句子长度、粤语原文识别、去重、读取预算、取消、有限段落完成、桌面请求通道、来源选择记忆和回退。记录测试覆盖去重、100 条上限、同篇隔离、旧记录迁移、清空失败与重试、正文排除和存储损坏恢复。音效测试覆盖录音完整性、按键映射、组字批量输入、播放取消、异步切换、音量、偏好记忆与加载失败恢复。组件测试使用受控时钟和 React hooks 替身，不包含真实 DOM、真实音频设备或操作系统候选窗。
 
 2026-11-06 已在真实 DSH `0.2.2-rc.1` 中确认三语界面、中文组字与选词上屏，以及两个注音分块实际加载。用户在输入层阶段同步确认候选窗位置正常。模拟宿主页另验了注音随词切换、当前词／全部排版一致、带注音长文本内部滚动、输入锚点、键盘导航和窄屏。详见 [IME 验证记录](docs/validation/2026-11-06-ime.md)与[注音验证记录](docs/validation/2026-11-06-annotations.md)。这些检查不代表所有输入法和设备均已验收。
 
@@ -163,9 +179,11 @@ npm test
 
 记录窗口、刷新恢复、同篇比较、清空确认和窄屏的验证范围见[记录验证文档](docs/validation/2026-11-06-records.md)。
 
+音效另在浏览器模拟宿主页验证了全部录音解码、四种音色的非零音频信号、逐键播放计数、选项恢复和中英窄屏布局。本轮未完成原生 DSH 的实际听音及真实 IME 期间的音效验收，详见[音效验证记录](docs/validation/2026-11-06-keyboard-sounds.md)。
+
 ## 已知限制
 
-- 当前已交付输入层、三语示例语料、拼音／粤拼提示、近期本地对话选文、最佳记录和练习历史。手动导入、收藏、音效和自定义外观尚未实现，后续见 [多语言规划](docs/plans/2026-11-06-multilingual-practice-plan.md)。
+- 当前已交付输入层、三语示例语料、拼音／粤拼提示、近期本地对话选文、最佳记录、练习历史和键盘音效。手动导入、收藏和自定义外观尚未实现，后续见 [多语言规划](docs/plans/2026-11-06-multilingual-practice-plan.md)。
 - 每次最多检查 30 个会话，Host 使用 8 秒协作取消预算，Client 最长等待 12 秒；下次从后续会话继续。无结果表示本次预算内未找到，不保证遍历全部历史。宿主读取超大会话仍可能加载整份日志，预算不是严格的磁盘字节上限。
 - 粤语识别使用用词特征初筛，可能漏选或误选；不保证所有片段的语言与自然度。不同宿主版本的历史格式可能需要适配，失败时回退默认语料。来源仅限当前 DSH profile，不读取其他应用历史。
 - 自动注音和分词仍可能有误。内置粤语已为「慢慢行」「返到屋企」增加上下文读音校正；暂未提供用户选音、人工覆盖或读音教学功能。
@@ -176,7 +194,7 @@ npm test
 
 ## License
 
-[MIT](LICENSE)。随包注音依赖的版本、来源和许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+[MIT](LICENSE)。随包注音依赖和键盘录音的版本、来源和许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ---
 
