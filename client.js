@@ -26,7 +26,6 @@ window.__ModuleLoader__.load({
     const LANGUAGES = ['en', 'zh', 'yue'];
     const HINT_MODES = ['off', 'current', 'all'];
     const HINT_KEY = 'dsh.typing-practice.annotations.v1';
-    const SETTINGS_TABS = ['annotations', 'sound', 'cursor'];
     const RULES_VERSION = 2;
     const DURATIONS = [15, 30, 60];
     const DEFAULT_DURATION = 30;
@@ -714,7 +713,7 @@ return module.exports; })();
 .tp-records-filter select:focus-visible, .tp-sound-field select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .tp-annotation-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--dsw-alias-label-secondary); }
 .tp-corpus-controls { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 100%; }
-.tp-corpus-status { display: grid; width: 0; min-width: 100%; min-height: 36px; align-items: start; text-align: left; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.tp-corpus-status { display: grid; min-width: 0; min-height: 36px; align-items: center; text-align: center; font-size: 11.5px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 .tp-corpus-status > *, .tp-instructions > * { grid-area: 1 / 1; margin: 0; overflow-wrap: anywhere; }
 .tp-status-size { visibility: hidden; pointer-events: none; user-select: none; }
 .tp-corpus-name { font-variant-numeric: tabular-nums; }
@@ -949,13 +948,12 @@ return module.exports; })();
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
-.tp-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-.tp-run-actions { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.tp-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 16px; }
+.tp-run-actions { display: flex; align-items: center; justify-self: end; gap: 8px; }
 .tp-action { position: relative; display: inline-flex; }
 .tp-shortcut-tip { position: absolute; left: 50%; bottom: calc(100% + 8px); z-index: 10; padding: 5px 9px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font-size: 11.5px; white-space: nowrap; visibility: hidden; opacity: 0; transform: translate(-50%, 4px); pointer-events: none; transition: opacity 120ms ease-out, transform 120ms ease-out, visibility 120ms; }
 .tp-action .tp-btn:focus-visible + .tp-shortcut-tip { visibility: visible; opacity: 1; transform: translate(-50%, 0); transition: none; }
 .tp-instructions { display: grid; min-width: 0; flex: 1; font-size: 11.5px; line-height: 18px; }
-.tp-actions > .tp-btn { flex: none; }
 .tp-btn {
   display: inline-flex;
   align-items: center;
@@ -1024,22 +1022,24 @@ return module.exports; })();
 .tp-clear-confirm h3 { margin-top: 0; }
 .tp-clear-confirm p { color: var(--dsw-alias-label-secondary); }
 .tp-clear-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
-.tp-settings-dialog { width: min(440px, calc(100vw - 32px)); height: min(460px, calc(100vh - 32px)); }
-.tp-settings-tabs { display: flex; gap: 4px; margin: 0 20px 16px; border-bottom: 1px solid var(--dsw-alias-border-l1); flex: none; }
-.tp-settings-tab { border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
-.tp-settings-tab[aria-selected="true"] { color: var(--dsw-alias-label-primary); border-bottom-color: currentColor; }
-.tp-settings-panel { min-height: 0; overflow-y: auto; }
-.tp-sound-body { padding: 4px 20px 20px; overflow-y: auto; }
-.tp-sound-field { display: grid; gap: 8px; margin-bottom: 18px; font-size: 13px; }
+.tp-settings-dialog { width: min(520px, calc(100vw - 32px)); height: fit-content; }
+.tp-settings-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 20px 24px; display: grid; gap: 24px; }
+.tp-settings-section { min-width: 0; }
+.tp-settings-section h3 { margin: 0 0 12px; font-size: 13px; font-weight: 650; }
+.tp-sound-body { display: grid; gap: 12px; min-width: 0; }
+.tp-sound-field { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 16px; margin: 0; font-size: 13px; min-width: 0; }
 .tp-sound-field .tp-select, .tp-sound-field select { width: 100%; min-width: 0; }
+.tp-sound-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .tp-sound-volume { display: flex; align-items: center; gap: 16px; }
 .tp-sound-volume input { flex: 1; min-width: 0; min-height: 44px; margin: 0; accent-color: var(--dsw-alias-label-primary); }
 .tp-sound-volume output { width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
-.tp-sound-status { display: grid; margin: 10px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.tp-sound-status { display: grid; margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.tp-hint-status[data-empty="true"], .tp-cursor-status[data-empty="true"] { display: none; }
 .tp-sound-status > span { grid-area: 1 / 1; }
 .tp-sound-credit { font-size: 11px; color: var(--dsw-alias-label-secondary); text-underline-offset: 3px; }
-.tp-cursor-preview { display: flex; justify-content: center; align-items: center; min-height: 92px; margin: 0 0 18px; border-radius: 8px; background: var(--dsw-alias-bg-layer-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 26px; line-height: 1.25; }
+.tp-cursor-preview { display: flex; justify-content: center; align-items: center; min-height: 60px; margin: 0; border-radius: 8px; background: var(--dsw-alias-bg-layer-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 26px; line-height: 1.25; }
 .tp-cursor-preview-text { white-space: pre; }
+.tp-cursor-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .tp-cursor-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; font-size: 13px; cursor: pointer; }
 .tp-cursor-toggle input { appearance: none; flex: none; position: relative; width: 36px; height: 22px; margin: 0; border: 1px solid var(--dsw-alias-border-l1); border-radius: 999px; background: var(--dsw-alias-bg-layer-3); cursor: pointer; }
 .tp-cursor-toggle input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-label-primary); transition: transform 150ms ease-out; }
@@ -1071,9 +1071,21 @@ return module.exports; })();
   .tp-exercise .tp-seg-btn:nth-child(4) { margin-left: 0; }
   .tp-exercise .tp-seg-btn:nth-child(4)::before { content: none; }
 }
+@media (max-width: 680px) {
+  .tp-actions { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .tp-instructions { grid-column: 1; grid-row: 1; }
+  .tp-run-actions { grid-column: 2; grid-row: 1; }
+  .tp-corpus-status { grid-column: 1 / -1; grid-row: 2; }
+}
 @media (max-width: 480px) {
-  .tp-actions { flex-wrap: wrap; gap: 8px; }
-  .tp-instructions { flex-basis: 100%; }
+  .tp-actions { grid-template-columns: minmax(0, 1fr); }
+  .tp-instructions { grid-column: 1; grid-row: 1; }
+  .tp-corpus-status { grid-column: 1; grid-row: 2; min-height: 18px; }
+  .tp-run-actions { grid-column: 1; grid-row: 3; margin-top: 36px; }
+  .tp-settings-content { padding-inline: 14px; }
+  .tp-sound-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .tp-sound-picker { align-items: end; }
+  .tp-cursor-toggles { gap: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tp-seg-btn, .tp-timebar-fill { transition: none; }
@@ -1254,7 +1266,6 @@ return module.exports; })();
       const [soundPreference, setSoundPreference] = React.useState(loadSoundPreference);
       const soundPreferenceRef = React.useRef(soundPreference);
       const [settingsOpen, setSettingsOpen] = React.useState(false);
-      const [settingsTab, setSettingsTab] = React.useState('annotations');
       const [soundStatus, setSoundStatus] = React.useState('idle');
       const [soundSaveError, setSoundSaveError] = React.useState(false);
       const settingsDialogRef = React.useRef(null);
@@ -1324,7 +1335,7 @@ return module.exports; })();
         if (!dialog) return;
         if (settingsOpen && !dialog.open) {
           dialog.showModal();
-          (dialog.querySelector?.('[role="tab"][aria-selected="true"]') || settingsCloseRef.current)?.focus();
+          (dialog.querySelector?.('select') || settingsCloseRef.current)?.focus();
         } else if (!settingsOpen && dialog.open) { dialog.close(); settingsButtonRef.current?.focus({ preventScroll: true }); }
       }, [settingsOpen]);
 
@@ -1544,7 +1555,7 @@ return module.exports; })();
       React.useEffect(() => () => { corpusRequest.current?.abort(); corpusRequest.current = null; }, []);
 
       // A remembered local source also applies when the page is reopened or
-      // the practice language changes. Fallback never changes this preference.
+      // the practice language changes, until a failed selection falls back.
       React.useEffect(() => {
         if (corpusPreference === 'local') nextPassage(false);
       }, [corpusPreference, session.language, session.mode, session.length, session.duration]);
@@ -1625,6 +1636,8 @@ return module.exports; })();
           restart(current.duration, focus, current.language, current.hints, candidate.text, candidate.source);
         } else {
           restart(current.duration, focus, current.language, current.hints, null, null);
+          setCorpusPreference('builtin');
+          setCorpusPreferenceError(!saveCorpusPreference('builtin'));
           setToast({ message: fallback, id: ++toastSequence.current });
         }
       }
@@ -1792,17 +1805,6 @@ return module.exports; })();
             h('path', { d: 'M5 5 19 19M19 5 5 19' })));
       }
 
-      function changeSettingsTab(tab) { stopSound(); setSettingsTab(tab); }
-
-      function settingsKeyDown(event, index) {
-        const tabs = SETTINGS_TABS;
-        const keys = { ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 };
-        if (!Object.hasOwn(keys, event.key)) return;
-        event.preventDefault();
-        changeSettingsTab(tabs[keys[event.key]]);
-        event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[keys[event.key]].focus();
-      }
-
       function renderSettings() {
         const props = { className: 'tp-records-dialog tp-settings-dialog', ref: settingsDialogRef, onClose: closeSettings };
         if (!settingsOpen) return h('dialog', props);
@@ -1810,14 +1812,10 @@ return module.exports; })();
           onCancel: event => { event.preventDefault(); closeSettings(); }, onKeyDown: event => event.stopPropagation() },
           h('div', { className: 'tp-records-header' }, h('h2', { id: 'tp-settings-title' }, t('settings')),
             renderDialogClose(t('settingsClose'), settingsCloseRef, closeSettings)),
-          h('div', { className: 'tp-settings-tabs', role: 'tablist', 'aria-label': t('settings') },
-            SETTINGS_TABS.map((tab, index) => h('button', { key: tab, id: 'tp-settings-tab-' + tab,
-              className: 'tp-seg-btn tp-settings-tab', type: 'button', role: 'tab',
-              'aria-selected': settingsTab === tab, 'aria-controls': 'tp-settings-panel-' + tab, tabIndex: settingsTab === tab ? 0 : -1,
-              onClick: () => changeSettingsTab(tab), onKeyDown: event => settingsKeyDown(event, index) }, t(tab)))),
-          SETTINGS_TABS.map(tab => h('div', { key: tab, className: 'tp-settings-panel', id: 'tp-settings-panel-' + tab,
-            role: 'tabpanel', 'aria-labelledby': 'tp-settings-tab-' + tab, hidden: settingsTab !== tab },
-            settingsTab === tab ? (tab === 'annotations' ? renderAnnotations() : tab === 'sound' ? renderSound() : renderCursor()) : null)));
+          h('div', { className: 'tp-settings-content' },
+            [['cursor', renderCursor], ['annotations', renderAnnotations], ['sound', renderSound]].map(([section, render]) =>
+              h('section', { key: section, className: 'tp-settings-section', 'aria-labelledby': 'tp-settings-' + section },
+                h('h3', { id: 'tp-settings-' + section }, t(section)), render()))));
       }
 
       function renderAnnotations() {
@@ -1837,7 +1835,7 @@ return module.exports; })();
             }, HINT_MODES.map(mode => h('option', { key: mode, value: mode }, t('hint_' + mode)))),
             h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false },
               h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
-          h('div', { className: 'tp-sound-status tp-hint-status' },
+          h('div', { className: 'tp-sound-status tp-hint-status', 'data-empty': !hintSaveError },
             h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('hintSaveError')),
             h('span', { role: 'status' }, hintSaveError ? t('hintSaveError') : '')));
       }
@@ -1858,28 +1856,29 @@ return module.exports; })();
               h('span', { className: 'tp-select' }, h('select', { value: cursorPreference.shape, 'aria-label': t('cursorShape'), onChange: event => changeCursor({ shape: event.currentTarget.value }) },
                 CURSOR_SHAPES.map(shape => h('option', { key: shape, value: shape }, t('cursor_' + shape)))),
                 h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false }, h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
-            ['glow', 'blink'].map(option => h('label', { className: 'tp-cursor-toggle', key: option },
+            h('div', { className: 'tp-cursor-toggles' }, ['glow', 'blink'].map(option => h('label', { className: 'tp-cursor-toggle', key: option },
               h('span', null, t(option === 'glow' ? 'cursorGlow' : 'cursorBlink')),
-              h('input', { type: 'checkbox', role: 'switch', checked: cursorPreference[option], onChange: event => changeCursor({ [option]: event.currentTarget.checked }) }))),
-            h('div', { className: 'tp-sound-status' },
+              h('input', { type: 'checkbox', role: 'switch', checked: cursorPreference[option], onChange: event => changeCursor({ [option]: event.currentTarget.checked }) })))),
+            h('div', { className: 'tp-sound-status tp-cursor-status', 'data-empty': !cursorSaveError },
               h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('cursorSaveError')),
               h('span', { role: 'status' }, cursorSaveError ? t('cursorSaveError') : '')));
       }
 
       function renderSound() {
         return h('div', { className: 'tp-sound-body' },
+          h('div', { className: 'tp-sound-picker' },
             h('label', { className: 'tp-sound-field' }, h('span', null, t('soundPack')),
               h('span', { className: 'tp-select' }, h('select', { value: soundPreference.pack, 'aria-label': t('soundPack'), onChange: event => changeSound({ pack: event.currentTarget.value }) },
                 SOUND_PACKS.map(pack => h('option', { key: pack, value: pack }, t('sound_' + pack)))),
                 h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false }, h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
+            h('button', { className: 'tp-btn', type: 'button', disabled: soundPreference.pack === 'off' || !soundPreference.volume,
+              onClick: () => { stopSound(); void prepareSound(true); } }, t('soundPreview'))),
             h('label', { className: 'tp-sound-field' }, h('span', null, t('soundVolume')),
               h('span', { className: 'tp-sound-volume' }, h('input', { type: 'range', min: 0, max: 100, step: 5, value: soundPreference.volume,
                 'aria-valuetext': soundPreference.volume + '%', onChange: event => changeSound({ volume: Number(event.currentTarget.value) }) }),
               h('output', { 'aria-hidden': true }, soundPreference.volume + '%'))),
-            h('button', { className: 'tp-btn', type: 'button', disabled: soundPreference.pack === 'off' || !soundPreference.volume,
-              onClick: () => { stopSound(); void prepareSound(true); } }, t('soundPreview')),
-            h('div', { className: 'tp-sound-status' },
-              ['soundLoading', 'soundError', 'soundSaveError'].map(key => h('span', { className: 'tp-status-size', 'aria-hidden': true, key }, t(key))),
+            h('div', { className: 'tp-sound-status tp-audio-status' },
+              h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('soundLoading')),
               h('span', { role: 'status' }, soundSaveError ? t('soundSaveError') : soundStatus === 'loading' ? t('soundLoading') : soundStatus === 'error' ? t('soundError') : '')),
             h('a', { className: 'tp-sound-credit', href: 'https://github.com/tplai/kbsim', target: '_blank', rel: 'noreferrer' }, t('soundCredit')),
           );
@@ -2036,13 +2035,7 @@ return module.exports; })();
                   className: 'tp-seg-btn' + (source === corpusPreference ? ' active' : ''),
                   'aria-pressed': source === corpusPreference,
                   onClick: () => changeCorpusPreference(source),
-                }, t(source === 'builtin' ? 'corpusBuiltin' : 'corpusLocal')))),
-              h('div', { className: 'tp-corpus-status' },
-                h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusLoading')),
-                h('span', { className: 'tp-corpus-name', title: session.source?.title || undefined,
-                  style: { visibility: corpusBusy ? 'hidden' : 'visible' } },
-                  isPassage || session.source ? (session.source ? t('corpusRecent') : t('corpusBuiltin')) + ' · ' + t('corpusCount', { n: session.target.length }) : ''),
-                h('p', { className: 'tp-corpus-note', role: 'status', 'aria-atomic': true }, corpusBusy ? t('corpusLoading') : ''))),
+                }, t(source === 'builtin' ? 'corpusBuiltin' : 'corpusLocal'))))),
           ),
           h('div', { className: 'tp-card' },
             h('div', {
@@ -2135,6 +2128,12 @@ return module.exports; })();
                   }, t('hintRetry')) : null,
                 ) : null,
               ),
+              h('div', { className: 'tp-corpus-status' },
+                h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusLoading')),
+                h('span', { className: 'tp-corpus-name', title: session.source?.title || undefined,
+                  style: { visibility: corpusBusy ? 'hidden' : 'visible' } },
+                  (session.source ? t('corpusRecent') : t('corpusBuiltin')) + ' · ' + t('corpusCount', { n: session.target.length })),
+                h('p', { className: 'tp-corpus-note', role: 'status', 'aria-atomic': true }, corpusBusy ? t('corpusLoading') : '')),
               h('div', { className: 'tp-run-actions' },
                 h('span', { className: 'tp-action' },
                   h('button', { type: 'button', className: 'tp-btn tp-quiet tp-corpus-next', onClick: () => nextPassage(),

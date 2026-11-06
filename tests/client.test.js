@@ -151,10 +151,8 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     find((node) => node.type === 'textarea').props.onInput({ currentTarget: inputElement, nativeEvent: { inputType, data, isComposing } });
     render();
   }
-  function openSettings(tab = '注音') {
+  function openSettings() {
     find(node => node.type === 'button' && node.children[0] === '设置').props.onClick();
-    render();
-    find(node => node.props.role === 'tab' && node.children[0] === tab).props.onClick();
     render();
   }
   function closeSettings() {
@@ -195,13 +193,13 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     input: dispatchInput,
     audioLoads,
     openSettings,
-    openSound() { openSettings('音效'); },
+    openSound: openSettings,
     soundOpen: () => soundDialog.open,
     soundPack(pack) { find(node => node.type === 'select' && node.props['aria-label'] === '声音').props.onChange({ currentTarget: { value: pack } }); render(); },
     soundVolume(volume) { find(node => node.type === 'input' && node.props.type === 'range').props.onChange({ currentTarget: { value: volume } }); render(); },
     previewSound() { find(node => node.type === 'button' && node.children[0] === '试听').props.onClick(); render(); },
     closeSound: closeSettings,
-    soundMessage() { return find(node => node.props.role === 'status', find(node => node.type === 'dialog' && node.props.className.includes('tp-settings-dialog')))?.children[0]; },
+    soundMessage() { return find(node => node.props.role === 'status', find(node => node.props.className === 'tp-sound-status tp-audio-status'))?.children[0]; },
     soundPreference: () => JSON.parse(storage.get('dsh.typing-practice.sound.v1') || 'null'),
     soundValue: () => find(node => node.type === 'select' && node.props['aria-label'] === '声音').props.value,
     focusInput() { dom.activeElement = inputElement; find(node => node.type === 'textarea').props.onFocus({ currentTarget: inputElement }); render(); },
@@ -265,19 +263,11 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     toastTimers: () => timeouts.size,
     shortcutLabel: () => find(node => node.props.id === 'tp-next-shortcut').children[0],
     shortcutAria: () => find(node => node.props.className?.includes('tp-corpus-next') && node.type === 'button').props['aria-keyshortcuts'],
-    settingsTab: () => find(node => node.props.role === 'tab' && node.props['aria-selected'])?.children[0],
     settingsDisabled: () => find(node => node.type === 'button' && node.children[0] === '设置').props.disabled,
-    settingsTabs: () => find(node => node.props.role === 'tablist').children.flat(Infinity).map(node => node.children[0]),
+    settingsSections: () => find(node => node.props.className === 'tp-settings-content').children.flat(Infinity).map(node => node.children[0].children[0]),
     hintControl: () => find(node => node.type === 'select' && node.props['aria-label'] === '拼音／粤拼')?.props,
     hintError: () => find(node => node.props.role === 'status', find(node => node.props.className === 'tp-sound-status tp-hint-status'))?.children[0],
     privacyInSubtitle: () => Boolean(find(node => node.props.className === 'tp-privacy-note', find(node => node.props.className === 'tp-subtitle'))),
-    settingsTabKey(key) {
-      const tabs = find(node => node.props.role === 'tablist').children.flat(Infinity);
-      let focus = -1;
-      tabs.find(node => node.props['aria-selected']).props.onKeyDown({ key, preventDefault() {},
-        currentTarget: { parentElement: { querySelectorAll: () => tabs.map((_, i) => ({ focus() { focus = i; } })) } } });
-      render(); return focus;
-    },
     cursorShape(shape) { find(node => node.type === 'select' && node.props['aria-label'] === '形状').props.onChange({ currentTarget: { value: shape } }); render(); },
     cursorPreference: () => JSON.parse(storage.get('dsh.typing-practice.cursor.v1') || 'null'),
     restart() {
@@ -786,7 +776,7 @@ test('conversation selection and hint changes isolate old IME while retaining th
   assert.notEqual(app.board().text, '你好，周末。'); assert.equal(app.stat('用时'), 0);
 });
 
-test('default source does not request history; local selection uses language and retains preference after fallback', async () => {
+test('default source does not request history; local fallback selects and remembers the built-in source', async () => {
   const app = mountClient();
   assert.equal(app.requests.length, 0);
   app.language('粤语');
@@ -796,8 +786,11 @@ test('default source does not request history; local selection uses language and
   assert.match(app.requests[0].url, /language=yue/);
   assert.ok(app.board().text.length >= 1200); assert.equal(app.stat('剩余'), 30);
   assert.match(app.corpusMessage(), /未找到/);
-  assert.equal(app.sourceSelected('本地对话语料'), true);
+  assert.equal(app.sourceSelected('默认语料'), true);
+  assert.equal(JSON.parse(app.rawStorage('dsh.typing-practice.preferences.v1')).source, 'builtin');
   await app.nextPassage(); await app.settle();
+  assert.equal(app.requests.length, 1);
+  app.source('本地对话语料'); await app.settle();
   assert.equal(app.requests.length, 2);
 });
 
@@ -806,7 +799,20 @@ test('failed recent-history request falls back to built-in text without affectin
   app.source('本地对话语料'); await app.settle();
   assert.ok(app.board().text.length >= 1200); assert.equal(app.stat('剩余'), 30);
   assert.match(app.corpusMessage(), /暂不可用/);
+  assert.equal(app.sourceSelected('默认语料'), true);
   assert.deepEqual(app.saved(), {});
+});
+
+test('fallback still selects built-in text if saving its source fails, without retrying local reads', async () => {
+  let fail = false;
+  const key = 'dsh.typing-practice.preferences.v1';
+  const app = mountClient(undefined, {}, name => fail && name === key, undefined, async () => { throw new Error('unavailable'); });
+  app.source('本地对话语料'); fail = true; await app.settle();
+  assert.equal(app.sourceSelected('默认语料'), true);
+  assert.equal(app.preferenceError(), true);
+  assert.match(app.corpusMessage(), /暂不可用/);
+  await app.nextPassage(); await app.settle();
+  assert.equal(app.requests.length, 1);
 });
 
 test('language change aborts an old local read and selects a passage in the new language', async () => {
@@ -862,7 +868,6 @@ test('source preference survives remount without persisting conversation text or
   await restored.settle();
   assert.equal(restored.requests.length, 1);
   assert.match(restored.corpusMessage(), /未找到/);
-  restored.builtin();
   assert.equal(restored.sourceSelected('默认语料'), true);
   const again = mountClient(undefined, { [preferenceKey]: restored.rawStorage(preferenceKey) });
   await again.nextPassage();
@@ -1075,7 +1080,7 @@ test('changing local length cancels old reads, sends the tier, and falls back to
   resolutions[1]({ ok: true, json: async () => ({ candidate: null, reason: 'empty' }) });
   await app.settle();
   assert.ok(entries.some(entry => entry.language === 'en' && entry.length === 'long' && entry.text === app.board().text));
-  assert.equal(app.sourceSelected('本地对话语料'), true); assert.equal(app.stat('用时'), 0);
+  assert.equal(app.sourceSelected('默认语料'), true); assert.equal(app.stat('用时'), 0);
   app.builtin(); assert.equal(app.stat('用时'), 0); assert.equal(app.preset(), '长篇');
 });
 
@@ -1395,7 +1400,7 @@ test('insufficient or old-host local buffers fall back entirely, retain the sele
     const app = mountClient(undefined, {}, false, undefined, async () => ({ ok: true, json: async () => body }));
     app.duration(15); app.source('本地对话语料'); await app.settle();
     assert.equal(app.preset(), '15 秒'); assert.equal(app.stat('剩余'), 15);
-    assert.equal(app.sourceSelected('本地对话语料'), true); assert.ok(app.board().text.length >= 1200);
+    assert.equal(app.sourceSelected('默认语料'), true); assert.ok(app.board().text.length >= 1200);
     assert.ok(app.corpusMessage());
     app.input(app.board().text[0], 1000); app.tick(16000);
     assert.equal(app.records().history[0].source, 'builtin');
@@ -1460,34 +1465,30 @@ test('composition and native candidate keys never restart or replace the passage
   app.key('Escape', 1500); assert.equal(app.board().typed, ''); assert.equal(app.board().text, text);
 });
 
-test('settings tabs preserve preferences, stop previews and isolate practice shortcuts', async () => {
+test('combined settings preserve independent preferences, stop previews on close and isolate practice shortcuts', async () => {
   const audio = audioHarness(); const app = mountClient(undefined, {}, false, undefined, undefined, undefined, audio);
-  app.openSound(); assert.equal(app.settingsTab(), '音效');
+  app.openSettings(); assert.deepEqual(app.settingsSections(), ['光标', '注音', '音效']);
   app.soundPack('cream'); app.soundVolume(40); await app.settle();
   app.previewSound(); await app.settle(); assert.ok(audio.contexts[0].sources.length);
   const text = app.board().text;
   app.key('r', 0, { ctrlKey: true }); assert.equal(app.board().text, text); assert.equal(app.soundOpen(), true);
   app.key('Escape', 0); assert.equal(app.soundOpen(), true); // Native dialog cancel owns Escape.
-  assert.equal(app.settingsTabKey('ArrowRight'), 2); assert.equal(app.settingsTab(), '光标');
-  assert.ok(audio.contexts[0].sources.every(source => source.stopped));
   app.cursorShape('outline');
-  assert.equal(app.settingsTabKey('Home'), 0); assert.equal(app.settingsTab(), '注音');
-  assert.equal(app.settingsTabKey('ArrowRight'), 1); assert.equal(app.soundValue(), 'cream');
+  assert.equal(app.soundValue(), 'cream');
   assert.equal(app.cursorPreference().shape, 'outline'); assert.equal(app.soundPreference().volume, 40);
   app.closeSound(); assert.equal(app.soundOpen(), false); assert.equal(app.board().text, text);
+  assert.ok(audio.contexts[0].sources.every(source => source.stopped));
+  app.openSettings(); assert.equal(app.soundValue(), 'cream'); assert.equal(app.cursorPreference().shape, 'outline');
 });
 
-test('pronunciation is always available in the first settings tab with wrapping keyboard navigation', async () => {
+test('all settings sections are available together while pronunciation stays shared across languages', async () => {
   const app = mountClient();
   app.openSettings();
-  assert.deepEqual(app.settingsTabs(), ['注音', '音效', '光标']);
-  assert.equal(app.settingsTab(), '注音');
+  assert.deepEqual(app.settingsSections(), ['光标', '注音', '音效']);
   assert.equal(app.hintControl().value, 'current');
-  assert.equal(app.settingsTabKey('ArrowLeft'), 2);
-  assert.equal(app.settingsTab(), '光标');
-  assert.equal(app.settingsTabKey('ArrowRight'), 0);
-  assert.equal(app.settingsTabKey('End'), 2);
-  assert.equal(app.settingsTabKey('Home'), 0);
+  assert.equal(app.soundValue(), 'off');
+  app.cursorShape('underline');
+  assert.equal(app.hintControl().value, 'current');
   app.closeSound();
   for (const language of ['中文', '粤语']) {
     app.language(language, 'all');
@@ -1496,7 +1497,7 @@ test('pronunciation is always available in the first settings tab with wrapping 
     app.openSettings();
     assert.equal(app.hintControl()['aria-label'], '拼音／粤拼');
     assert.equal(app.hintControl().value, 'all');
-    app.settingsTabKey('End'); app.settingsTabKey('Home');
+    app.cursorShape('line');
     assert.equal(app.hintControl().value, 'all');
     app.closeSound();
     assert.equal(app.board().text, text);
@@ -1567,10 +1568,10 @@ test('fallback toasts expire after three seconds, restart their timer on repeat 
   app.source('本地对话语料'); await app.settle();
   assert.match(app.corpusMessage(), /暂不可用/); assert.equal(app.toastTimers(), 1);
   app.tick(2999); assert.ok(app.corpusMessage());
-  await app.nextPassage(); await app.settle();
+  app.source('本地对话语料'); await app.settle();
   app.tick(3000); assert.ok(app.corpusMessage()); assert.equal(app.toastTimers(), 1);
   app.tick(5999); assert.equal(app.corpusMessage(), undefined); assert.equal(app.toastTimers(), 0);
-  await app.nextPassage(); await app.settle(); assert.equal(app.toastTimers(), 1);
+  app.source('本地对话语料'); await app.settle(); assert.equal(app.toastTimers(), 1);
   app.unmount(); assert.equal(app.toastTimers(), 0);
 });
 
