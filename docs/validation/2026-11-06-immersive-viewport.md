@@ -36,3 +36,11 @@ An isolated fixture at `127.0.0.1:4194` used the actual plugin, local React, DSH
 ## Boundaries
 
 Browser verification used the simulated Host and native automation text input. It verifies visual anchoring and real browser layout, not a new operating-system IME candidate-window acceptance pass or a newly installed native DSH version. Existing IME-handler regressions remain passing. Font fallback and rounding may vary slightly by operating system; measured line displacement here was below one CSS pixel.
+
+## Follow-up: borderless statistics
+
+The four live statistics and the completed-result container now use transparent, borderless layouts without rounded cards. Removing horizontal inset aligns the first statistic and result heading with the text area. Live statistics retain four equal columns on desktop and two columns at the existing narrow breakpoint, with a 24px column gap. Labels, units, numerical hierarchy and tabular digits are unchanged; scoring and record handling are unchanged.
+
+The same isolated browser fixture verified light and dark themes, Chinese and English labels, live updates and a 15-second completion. Before and after that timed run, the live statistics remained at y=255.75px with a height of 69.84375px. Computed statistic/result backgrounds were transparent, borders were 0px, and radii were 0px. At a 360px viewport, each live-statistics column was 154px wide without content overflow; the completed result also fit its 332px container. Console warnings/errors were empty. The desktop screenshot was saved as `typing-immersive-stats-dark.png`.
+
+`npm run build`, `node --check client.js`, and all 150 existing tests passed after the CSS adjustment. No new tests were added for this presentation-only change. The temporary viewport override was reset, the fixture tab closed, and the local server stopped.
