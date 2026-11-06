@@ -79,7 +79,6 @@ window.__ModuleLoader__.load({
       restartRun: '重新开始',
       restartHint: '开始打字即计时',
       restartHintIme: '开始组字即计时，上屏后判分',
-      footerTip: '输入错误可退格修正；最佳成绩只保存在本机浏览器。',
       inputPlaceholder: '',
       corpusNext: '换一段', corpusCancel: '取消选取', corpusBuiltin: '默认语料',
       corpusSource: '语料来源', corpusLocal: '本地对话语料',
@@ -103,6 +102,7 @@ window.__ModuleLoader__.load({
       compareTimed: '此前最佳 {speed} {unit} · {acc}% · 本次 {delta} {unit}',
       comparePassage: '近期同篇最佳 {speed} {unit} · {acc}% · 本次 {delta} {unit}',
       newPassageRecord: '同篇新纪录',
+      settings: '设置', settingsClose: '关闭设置', settingsRunning: '完成或重新开始后可调整设置',
       sound: '音效', soundTitle: '键盘音效', soundClose: '关闭音效设置', soundPack: '声音', soundVolume: '音量', soundPreview: '试听',
       sound_off: '关闭', sound_mxblue: 'Cherry MX Blue · 青轴', sound_mxbrown: 'Cherry MX Brown · 茶轴',
       sound_cream: 'NovelKeys Cream · 奶油轴', sound_holypanda: 'Holy Panda · 圣熊猫',
@@ -162,7 +162,6 @@ window.__ModuleLoader__.load({
       restartRun: 'Restart',
       restartHint: 'Timing starts on the first key',
       restartHintIme: 'Time starts with composition; committed text is scored',
-      footerTip: 'Backspace fixes mistakes; best scores stay in this browser.',
       inputPlaceholder: '',
       corpusNext: 'New passage', corpusCancel: 'Cancel selection', corpusBuiltin: 'Built-in text',
       corpusSource: 'Text source', corpusLocal: 'Local conversations',
@@ -186,6 +185,7 @@ window.__ModuleLoader__.load({
       compareTimed: 'Previous best {speed} {unit} · {acc}% · This run {delta} {unit}',
       comparePassage: 'Recent same-passage best {speed} {unit} · {acc}% · This run {delta} {unit}',
       newPassageRecord: 'New passage best',
+      settings: 'Settings', settingsClose: 'Close settings', settingsRunning: 'Finish or restart this run to change settings',
       sound: 'Sound', soundTitle: 'Keyboard sounds', soundClose: 'Close sound settings', soundPack: 'Sound', soundVolume: 'Volume', soundPreview: 'Preview',
       sound_off: 'Off', sound_mxblue: 'Cherry MX Blue', sound_mxbrown: 'Cherry MX Brown',
       sound_cream: 'NovelKeys Cream', sound_holypanda: 'Holy Panda',
@@ -576,6 +576,8 @@ return module.exports; })();
 
     const CSS = `
 .tp-root {
+  position: relative;
+  isolation: isolate;
   height: 100%;
   min-height: 100%;
   overflow-y: auto;
@@ -632,14 +634,15 @@ return module.exports; })();
 }
 .tp-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
+.tp-practice-options { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; }
 .tp-seg.tp-practice-controls { display: flex; align-items: stretch; max-width: 100%; gap: 8px; }
-.tp-language { display: grid; grid-template-columns: repeat(3, minmax(44px, 1fr)); gap: 2px; }
-.tp-exercise { display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr)); gap: 2px; padding-left: 9px; border-left: 1px solid var(--dsw-alias-border-l1); }
+.tp-language { display: grid; grid-template-columns: repeat(3, minmax(44px, max-content)); gap: 2px; }
+.tp-exercise { display: grid; grid-template-columns: repeat(6, minmax(44px, max-content)); gap: 2px; padding-left: 9px; border-left: 1px solid var(--dsw-alias-border-l1); }
 .tp-exercise .tp-seg-btn { position: relative; padding-inline: 12px; white-space: nowrap; }
 .tp-exercise .tp-seg-btn:nth-child(4) { margin-left: 8px; }
 .tp-exercise .tp-seg-btn:nth-child(4)::before { content: ''; position: absolute; left: -6px; top: 10px; bottom: 10px; border-left: 1px solid var(--dsw-alias-border-l1); }
@@ -689,12 +692,11 @@ return module.exports; })();
 .tp-hint-control select:focus-visible, .tp-records-filter select:focus-visible, .tp-sound-field select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .tp-hint-control select:disabled { cursor: default; opacity: .55; }
 .tp-annotation-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--dsw-alias-label-secondary); }
-.tp-corpus-bar { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; }
-.tp-corpus-status { display: grid; flex: 1 1 260px; min-width: 0; min-height: 36px; align-items: center; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.tp-corpus-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-left: auto; max-width: 100%; }
+.tp-corpus-status { display: grid; width: 240px; max-width: 100%; min-width: 0; min-height: 36px; align-items: start; text-align: right; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 .tp-corpus-status > *, .tp-instructions > * { grid-area: 1 / 1; margin: 0; overflow-wrap: anywhere; }
 .tp-status-size { visibility: hidden; pointer-events: none; user-select: none; }
 .tp-corpus-name { font-variant-numeric: tabular-nums; }
-.tp-corpus-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-left: auto; }
 .tp-corpus-controls .tp-seg-btn { padding: 0 10px; }
 .tp-btn.tp-corpus-next { display: grid; justify-items: center; }
 .tp-corpus-next > * { grid-area: 1 / 1; }
@@ -751,7 +753,7 @@ return module.exports; })();
   background: var(--dsw-alias-brand-primary);
   transition: width 120ms linear;
 }
-.tp-board-wrap { position: relative; cursor: text; }
+.tp-board-wrap { position: relative; cursor: text; margin-block: 14px; }
 .tp-card:focus-within .tp-focus-hint { color: var(--dsw-alias-label-primary); text-decoration: underline; text-underline-offset: 3px; }
 .tp-seg-btn:focus-visible, .tp-btn:focus-visible {
   outline: 2px solid var(--dsw-alias-label-primary);
@@ -921,6 +923,10 @@ return module.exports; })();
   font-variant-numeric: tabular-nums;
 }
 .tp-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.tp-run-actions { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.tp-action { position: relative; display: inline-flex; }
+.tp-shortcut-tip { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 10; padding: 5px 9px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font-size: 11.5px; white-space: nowrap; visibility: hidden; opacity: 0; transform: translateY(4px); pointer-events: none; transition: opacity 120ms ease-out, transform 120ms ease-out, visibility 120ms; }
+.tp-action .tp-btn:focus-visible + .tp-shortcut-tip { visibility: visible; opacity: 1; transform: none; transition: none; }
 .tp-instructions { display: grid; min-width: 0; flex: 1; font-size: 11.5px; line-height: 18px; }
 .tp-actions > .tp-btn { flex: none; }
 .tp-btn {
@@ -952,6 +958,16 @@ return module.exports; })();
   font-weight: 600;
 }
 .tp-btn:disabled { opacity: .45; cursor: not-allowed; }
+.tp-btn.tp-quiet { background: transparent; border-color: transparent; }
+@media (hover: hover) and (pointer: fine) {
+  .tp-btn.tp-quiet:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-1); border-color: var(--dsw-alias-border-l2); }
+  .tp-action:hover .tp-shortcut-tip { visibility: visible; opacity: 1; transform: none; }
+}
+.tp-btn.tp-quiet:active:not(:disabled) { background: var(--dsw-alias-bg-layer-2); }
+.tp-toast-layer { position: sticky; top: 12px; height: 0; z-index: 20; display: flex; justify-content: center; pointer-events: none; }
+.tp-toast { max-width: min(560px, calc(100% - 28px)); height: fit-content; margin: 0; padding: 10px 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: 0 4px 18px rgb(0 0 0 / .12); font-size: 12.5px; animation: tp-toast-in 220ms cubic-bezier(.32,.72,0,1), tp-toast-out 160ms 2840ms ease-out forwards; }
+@keyframes tp-toast-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes tp-toast-out { to { opacity: 0; transform: translateY(-6px); } }
 .tp-records-dialog { width: min(760px, calc(100vw - 32px)); height: min(680px, calc(100vh - 32px)); max-height: calc(100vh - 32px); padding: 0; margin: auto; border: 1px solid var(--dsw-alias-border-l1); border-radius: 14px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font: inherit; }
 .tp-records-dialog[open] { display: flex; flex-direction: column; }
 .tp-records-dialog::backdrop { background: rgb(0 0 0 / .35); }
@@ -979,7 +995,11 @@ return module.exports; })();
 .tp-clear-confirm h3 { margin-top: 0; }
 .tp-clear-confirm p { color: var(--dsw-alias-label-secondary); }
 .tp-clear-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
-.tp-sound-dialog, .tp-cursor-dialog { width: min(440px, calc(100vw - 32px)); height: fit-content; }
+.tp-settings-dialog { width: min(440px, calc(100vw - 32px)); height: min(460px, calc(100vh - 32px)); }
+.tp-settings-tabs { display: flex; gap: 4px; margin: 0 20px 16px; border-bottom: 1px solid var(--dsw-alias-border-l1); flex: none; }
+.tp-settings-tab { border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
+.tp-settings-tab[aria-selected="true"] { color: var(--dsw-alias-label-primary); border-bottom-color: currentColor; }
+.tp-settings-panel { min-height: 0; overflow-y: auto; }
 .tp-sound-body { padding: 4px 20px 20px; overflow-y: auto; }
 .tp-sound-field { display: grid; gap: 8px; margin-bottom: 18px; font-size: 13px; }
 .tp-sound-field .tp-select, .tp-sound-field select { width: 100%; min-width: 0; }
@@ -1010,22 +1030,27 @@ return module.exports; })();
   .tp-title { font-size: 18px; }
   .tp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tp-viewport { font-size: 18px; }
-  .tp-corpus-controls { order: -1; }
-  .tp-corpus-status { min-height: 18px; }
   .tp-records-header, .tp-records-toolbar, .tp-records-footer { padding-left: 14px; padding-right: 14px; }
   .tp-records-body { padding: 0 14px; }
 }
 @media (max-width: 680px) {
+  .tp-practice-options { width: 100%; }
   .tp-seg.tp-practice-controls { flex-direction: column; width: 100%; gap: 3px; }
   .tp-language { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .tp-exercise { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 3px 0 0; border-left: 0; border-top: 1px solid var(--dsw-alias-border-l1); }
   .tp-exercise .tp-seg-btn:nth-child(4) { margin-left: 0; }
   .tp-exercise .tp-seg-btn:nth-child(4)::before { content: none; }
 }
+@media (max-width: 480px) {
+  .tp-actions { flex-wrap: wrap; gap: 8px; }
+  .tp-instructions { flex-basis: 100%; }
+}
 @media (prefers-reduced-motion: reduce) {
   .tp-seg-btn, .tp-timebar-fill { transition: none; }
   .tp-root[data-cursor-blink] .tp-char.caret::before { animation: none; }
   .tp-cursor-toggle input::before { transition: none; }
+  .tp-shortcut-tip { transition: none; transform: none; }
+  .tp-toast { animation: none; }
 }
 `;
 
@@ -1198,25 +1223,29 @@ return module.exports; })();
       const clearButtonRef = React.useRef(null);
       const [soundPreference, setSoundPreference] = React.useState(loadSoundPreference);
       const soundPreferenceRef = React.useRef(soundPreference);
-      const [soundOpen, setSoundOpen] = React.useState(false);
+      const [settingsOpen, setSettingsOpen] = React.useState(false);
+      const [settingsTab, setSettingsTab] = React.useState('sound');
       const [soundStatus, setSoundStatus] = React.useState('idle');
       const [soundSaveError, setSoundSaveError] = React.useState(false);
-      const soundDialogRef = React.useRef(null);
-      const soundButtonRef = React.useRef(null);
-      const soundCloseRef = React.useRef(null);
+      const settingsDialogRef = React.useRef(null);
+      const settingsButtonRef = React.useRef(null);
+      const settingsCloseRef = React.useRef(null);
       const audioRef = React.useRef({ context: null, player: null, pack: null, preparing: null, epoch: 0, disposed: false, status: 'idle' });
       const [cursorPreference, setCursorPreference] = React.useState(loadCursorPreference);
-      const [cursorOpen, setCursorOpen] = React.useState(false);
       const [cursorSaveError, setCursorSaveError] = React.useState(false);
-      const cursorDialogRef = React.useRef(null);
-      const cursorButtonRef = React.useRef(null);
-      const cursorCloseRef = React.useRef(null);
       const [focused, setFocused] = React.useState(false);
       const [saveError, setSaveError] = React.useState(false);
       const [hintPreference, setHintPreference] = React.useState('current');
       const [annotationAttempt, setAnnotationAttempt] = React.useState(0);
       const [corpusBusy, setCorpusBusy] = React.useState(false);
-      const [corpusMessage, setCorpusMessage] = React.useState('');
+      const [toast, setToast] = React.useState(null);
+      const toastSequence = React.useRef(0);
+      const [isApple] = React.useState(() => /Mac|iPhone|iPad|iPod/i.test(window.navigator?.userAgentData?.platform || window.navigator?.platform || ''));
+      React.useEffect(() => {
+        if (!toast) return undefined;
+        const timer = window.setTimeout(() => setToast(null), 3000);
+        return () => window.clearTimeout(timer);
+      }, [toast]);
       const [corpusPreference, setCorpusPreference] = React.useState(loadCorpusPreference);
       const [corpusPreferenceError, setCorpusPreferenceError] = React.useState(false);
       const [exercisePreference, setExercisePreference] = React.useState(loadExercisePreference);
@@ -1260,18 +1289,13 @@ return module.exports; })();
       }, [clearConfirm]);
 
       React.useLayoutEffect(() => {
-        const dialog = soundDialogRef.current;
+        const dialog = settingsDialogRef.current;
         if (!dialog) return;
-        if (soundOpen && !dialog.open) { dialog.showModal(); soundCloseRef.current?.focus(); }
-        else if (!soundOpen && dialog.open) { dialog.close(); soundButtonRef.current?.focus({ preventScroll: true }); }
-      }, [soundOpen]);
-
-      React.useLayoutEffect(() => {
-        const dialog = cursorDialogRef.current;
-        if (!dialog) return;
-        if (cursorOpen && !dialog.open) { dialog.showModal(); cursorCloseRef.current?.focus(); }
-        else if (!cursorOpen && dialog.open) { dialog.close(); cursorButtonRef.current?.focus({ preventScroll: true }); }
-      }, [cursorOpen]);
+        if (settingsOpen && !dialog.open) {
+          dialog.showModal();
+          (dialog.querySelector?.('[role="tab"][aria-selected="true"]') || settingsCloseRef.current)?.focus();
+        } else if (!settingsOpen && dialog.open) { dialog.close(); settingsButtonRef.current?.focus({ preventScroll: true }); }
+      }, [settingsOpen]);
 
       function stopSound() {
         audioRef.current.epoch++;
@@ -1521,7 +1545,7 @@ return module.exports; })();
 
       function cancelCorpus() {
         corpusRequest.current?.abort(); corpusRequest.current = null;
-        setCorpusBusy(false); setCorpusMessage('');
+        setCorpusBusy(false); setToast(null);
       }
 
       async function nextPassage(focus = true) {
@@ -1533,7 +1557,7 @@ return module.exports; })();
         const controller = new AbortController();
         corpusRequest.current = controller;
         const current = sessionRef.current;
-        setCorpusBusy(true); setCorpusMessage('');
+        setCorpusBusy(true); setToast(null);
         let timeout;
         const deadline = new Promise((_, reject) => {
           timeout = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 12000);
@@ -1570,7 +1594,7 @@ return module.exports; })();
           restart(current.duration, focus, current.language, current.hints, candidate.text, candidate.source);
         } else {
           restart(current.duration, focus, current.language, current.hints, null, null);
-          setCorpusMessage(fallback);
+          setToast({ message: fallback, id: ++toastSequence.current });
         }
       }
 
@@ -1600,6 +1624,28 @@ return module.exports; })();
       }
 
       function nativeEvent(event) { return event.nativeEvent || event; }
+
+      function restartCurrent() {
+        const current = sessionRef.current;
+        restart(current.duration, true, current.language, current.hints, current.text, current.source);
+      }
+
+      function handlePracticeShortcut(event) {
+        const next = event.key?.toLowerCase() === 'r' && !event.shiftKey && !event.altKey
+          && (isApple ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey);
+        const reset = event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+        if ((!next && !reset) || event.defaultPrevented) return;
+        // Keep native candidate/select Escape and modal dismissal intact. A
+        // matching reload chord is suppressed here even when no action is safe.
+        if (next) event.preventDefault();
+        const input = nativeEvent(event);
+        if (recordsOpen || settingsOpen || event.target?.closest?.('dialog, select')
+          || compositionRef.current.active || input.isComposing || event.isComposing || input.keyCode === 229) return;
+        event.preventDefault(); event.stopPropagation();
+        if (event.repeat || input.repeat) return;
+        if (next) void nextPassage();
+        else restartCurrent();
+      }
 
       function inputReady() {
         return ['off', 'ready'].includes(sessionRef.current.annotationState);
@@ -1700,7 +1746,41 @@ return module.exports; })();
           h('p', { className: 'tp-record-meta' }, t('statsAccuracy') + ' ' + Math.round(accuracy * 100) + '%'));
       }
 
-      function closeSound() { stopSound(); setSoundOpen(false); }
+      function openSettings() {
+        const current = sessionRef.current;
+        if (current.startAt != null && !current.result || compositionRef.current.active) return;
+        cancelCorpus(); stopSound(); setSettingsOpen(true);
+      }
+
+      function closeSettings() { stopSound(); setSettingsOpen(false); }
+
+      function changeSettingsTab(tab) { stopSound(); setSettingsTab(tab); }
+
+      function settingsKeyDown(event, index) {
+        const tabs = ['sound', 'cursor'];
+        const keys = { ArrowRight: (index + 1) % 2, ArrowLeft: (index + 1) % 2, Home: 0, End: 1 };
+        if (!Object.hasOwn(keys, event.key)) return;
+        event.preventDefault();
+        changeSettingsTab(tabs[keys[event.key]]);
+        event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[keys[event.key]].focus();
+      }
+
+      function renderSettings() {
+        const props = { className: 'tp-records-dialog tp-settings-dialog', ref: settingsDialogRef, onClose: closeSettings };
+        if (!settingsOpen) return h('dialog', props);
+        return h('dialog', { ...props, 'aria-labelledby': 'tp-settings-title',
+          onCancel: event => { event.preventDefault(); closeSettings(); }, onKeyDown: event => event.stopPropagation() },
+          h('div', { className: 'tp-records-header' }, h('h2', { id: 'tp-settings-title' }, t('settings')),
+            h('button', { className: 'tp-btn tp-quiet', type: 'button', ref: settingsCloseRef, onClick: closeSettings, 'aria-label': t('settingsClose') }, '×')),
+          h('div', { className: 'tp-settings-tabs', role: 'tablist', 'aria-label': t('settings') },
+            ['sound', 'cursor'].map((tab, index) => h('button', { key: tab, id: 'tp-settings-tab-' + tab,
+              className: 'tp-seg-btn tp-settings-tab', type: 'button', role: 'tab',
+              'aria-selected': settingsTab === tab, 'aria-controls': 'tp-settings-panel-' + tab, tabIndex: settingsTab === tab ? 0 : -1,
+              onClick: () => changeSettingsTab(tab), onKeyDown: event => settingsKeyDown(event, index) }, t(tab)))),
+          ['sound', 'cursor'].map(tab => h('div', { key: tab, className: 'tp-settings-panel', id: 'tp-settings-panel-' + tab,
+            role: 'tabpanel', 'aria-labelledby': 'tp-settings-tab-' + tab, hidden: settingsTab !== tab },
+            settingsTab === tab ? (tab === 'sound' ? renderSound() : renderCursor()) : null)));
+      }
 
       function changeCursor(patch) {
         const next = { ...cursorPreference, ...patch };
@@ -1711,14 +1791,7 @@ return module.exports; })();
       }
 
       function renderCursor() {
-        const close = () => setCursorOpen(false);
-        const props = { className: 'tp-records-dialog tp-cursor-dialog', ref: cursorDialogRef, onClose: close };
-        if (!cursorOpen) return h('dialog', props);
-        return h('dialog', { ...props, 'aria-labelledby': 'tp-cursor-title',
-          onCancel: event => { event.preventDefault(); close(); }, onKeyDown: event => event.stopPropagation() },
-          h('div', { className: 'tp-records-header' }, h('h2', { id: 'tp-cursor-title' }, t('cursorTitle')),
-            h('button', { className: 'tp-btn', type: 'button', ref: cursorCloseRef, onClick: close, 'aria-label': t('cursorClose') }, '×')),
-          h('div', { className: 'tp-sound-body' },
+        return h('div', { className: 'tp-sound-body' },
             h('div', { className: 'tp-cursor-preview', role: 'img', 'aria-label': t('cursorPreview') },
               h('span', { className: 'tp-cursor-preview-text', 'aria-hidden': true }, 'Aa ', h('span', { className: 'tp-char caret' }, '中'), '文')),
             h('label', { className: 'tp-sound-field' }, h('span', null, t('cursorShape')),
@@ -1730,17 +1803,11 @@ return module.exports; })();
               h('input', { type: 'checkbox', role: 'switch', checked: cursorPreference[option], onChange: event => changeCursor({ [option]: event.currentTarget.checked }) }))),
             h('div', { className: 'tp-sound-status' },
               h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('cursorSaveError')),
-              h('span', { role: 'status' }, cursorSaveError ? t('cursorSaveError') : ''))));
+              h('span', { role: 'status' }, cursorSaveError ? t('cursorSaveError') : '')));
       }
 
       function renderSound() {
-        const props = { className: 'tp-records-dialog tp-sound-dialog', ref: soundDialogRef, onClose: closeSound };
-        if (!soundOpen) return h('dialog', props);
-        return h('dialog', { ...props, 'aria-labelledby': 'tp-sound-title',
-          onCancel: event => { event.preventDefault(); closeSound(); }, onKeyDown: event => event.stopPropagation() },
-          h('div', { className: 'tp-records-header' }, h('h2', { id: 'tp-sound-title' }, t('soundTitle')),
-            h('button', { className: 'tp-btn', type: 'button', ref: soundCloseRef, onClick: closeSound, 'aria-label': t('soundClose') }, '×')),
-          h('div', { className: 'tp-sound-body' },
+        return h('div', { className: 'tp-sound-body' },
             h('label', { className: 'tp-sound-field' }, h('span', null, t('soundPack')),
               h('span', { className: 'tp-select' }, h('select', { value: soundPreference.pack, 'aria-label': t('soundPack'), onChange: event => changeSound({ pack: event.currentTarget.value }) },
                 SOUND_PACKS.map(pack => h('option', { key: pack, value: pack }, t('sound_' + pack)))),
@@ -1755,7 +1822,7 @@ return module.exports; })();
               ['soundLoading', 'soundError', 'soundSaveError'].map(key => h('span', { className: 'tp-status-size', 'aria-hidden': true, key }, t(key))),
               h('span', { role: 'status' }, soundSaveError ? t('soundSaveError') : soundStatus === 'loading' ? t('soundLoading') : soundStatus === 'error' ? t('soundError') : '')),
             h('a', { className: 'tp-sound-credit', href: 'https://github.com/tplai/kbsim', target: '_blank', rel: 'noreferrer' }, t('soundCredit')),
-          ));
+          );
       }
 
       function renderRecords() {
@@ -1854,7 +1921,10 @@ return module.exports; })();
       const running = session.startAt != null && !result || composition.active;
 
       return h('div', { className: 'tp-root' + (isIme ? ' tp-ime' : '') + (session.hints !== 'off' ? ' tp-annotated' : ''),
+        onKeyDownCapture: handlePracticeShortcut,
         'data-cursor-shape': cursorPreference.shape, 'data-cursor-glow': String(cursorPreference.glow), 'data-cursor-blink': String(cursorPreference.blink) },
+        h('div', { className: 'tp-toast-layer', role: 'status', 'aria-live': 'polite', 'aria-atomic': true },
+          toast ? h('p', { className: 'tp-toast', key: toast.id }, t(toast.message)) : null),
         h('div', { className: 'tp-page' },
           h('header', { className: 'tp-header' },
             h('div', null,
@@ -1868,49 +1938,15 @@ return module.exports; })();
                 : legacy && Number.isFinite(legacy.wpm) && Number.isFinite(legacy.accuracy)
                   ? t('legacyBestValue', { speed: legacy.wpm, acc: Math.round(legacy.accuracy * 100) }) : t('bestNone'),
               ),
-              h('button', { className: 'tp-btn', type: 'button', ref: recordsButtonRef, onClick: openRecords,
+              h('button', { className: 'tp-btn tp-quiet', type: 'button', ref: recordsButtonRef, onClick: openRecords,
                 disabled: running, title: running ? t('recordsRunning') : undefined, 'aria-haspopup': 'dialog',
               }, t('records')),
-              h('button', { className: 'tp-btn', type: 'button', ref: soundButtonRef, disabled: running,
-                title: running ? t('soundRunning') : undefined, 'aria-haspopup': 'dialog', onClick: () => {
-                  const current = sessionRef.current;
-                  if (current.startAt != null && !current.result || compositionRef.current.active) return;
-                  cancelCorpus(); stopSound(); setSoundOpen(true);
-                } }, t('sound')),
-              h('button', { className: 'tp-btn', type: 'button', ref: cursorButtonRef, disabled: running,
-                title: running ? t('cursorRunning') : undefined, 'aria-haspopup': 'dialog', onClick: () => {
-                  const current = sessionRef.current;
-                  if (current.startAt != null && !current.result || compositionRef.current.active) return;
-                  cancelCorpus(); stopSound(); setCursorOpen(true);
-                } }, t('cursor')),
+              h('button', { className: 'tp-btn tp-quiet', type: 'button', ref: settingsButtonRef, disabled: running,
+                title: running ? t('settingsRunning') : undefined, 'aria-haspopup': 'dialog', onClick: openSettings }, t('settings')),
             ),
           ),
-          h('div', { className: 'tp-corpus-bar' },
-            h('div', { className: 'tp-corpus-status' },
-              // Invisible size guides keep translated/wrapped status text from
-              // moving the controls or practice area when a request settles.
-              ['corpusLoading', 'corpusEmpty', 'corpusUnavailable'].map(key => h('span', {
-                key, className: 'tp-status-size', 'aria-hidden': true,
-              }, t(key))),
-              h('span', { className: 'tp-corpus-name', title: session.source?.title || undefined,
-                style: { visibility: corpusBusy || corpusMessage ? 'hidden' : 'visible' },
-              }, isPassage || session.source ? (session.source ? t('corpusRecent') : t('corpusBuiltin')) + ' · ' + t('corpusCount', { n: session.target.length }) : ''),
-              h('p', { className: 'tp-corpus-note', role: 'status', 'aria-atomic': true }, corpusBusy || corpusMessage ? t(corpusBusy ? 'corpusLoading' : corpusMessage) : ''),
-            ),
-            h('div', { className: 'tp-corpus-controls' },
-              h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('corpusSource') },
-                ['builtin', 'local'].map(source => h('button', {
-                  key: source, type: 'button',
-                  className: 'tp-seg-btn' + (source === corpusPreference ? ' active' : ''),
-                  'aria-pressed': source === corpusPreference,
-                  onClick: () => changeCorpusPreference(source),
-                }, t(source === 'builtin' ? 'corpusBuiltin' : 'corpusLocal')))),
-              h('button', { type: 'button', className: 'tp-btn tp-corpus-next', onClick: () => nextPassage() },
-                h('span', null, t(corpusBusy ? 'corpusCancel' : 'corpusNext')),
-                h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusNext')),
-                h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusCancel')),
-              ))),
           h('div', { className: 'tp-toolbar' },
+            h('div', { className: 'tp-practice-options' },
             h('div', { className: 'tp-seg tp-practice-controls' },
               h('div', { className: 'tp-language', role: 'group', 'aria-label': t('languageLabel') },
                 LANGUAGES.map((language) => h('button', {
@@ -1945,6 +1981,21 @@ return module.exports; })();
                   h('path', { d: 'M3 4.5 6 7.5 9 4.5' })),
               ),
             ) : null,
+            ),
+            h('div', { className: 'tp-corpus-controls' },
+              h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('corpusSource') },
+                ['builtin', 'local'].map(source => h('button', {
+                  key: source, type: 'button',
+                  className: 'tp-seg-btn' + (source === corpusPreference ? ' active' : ''),
+                  'aria-pressed': source === corpusPreference,
+                  onClick: () => changeCorpusPreference(source),
+                }, t(source === 'builtin' ? 'corpusBuiltin' : 'corpusLocal')))),
+              h('div', { className: 'tp-corpus-status' },
+                h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusLoading')),
+                h('span', { className: 'tp-corpus-name', title: session.source?.title || undefined,
+                  style: { visibility: corpusBusy ? 'hidden' : 'visible' } },
+                  isPassage || session.source ? (session.source ? t('corpusRecent') : t('corpusBuiltin')) + ' · ' + t('corpusCount', { n: session.target.length }) : ''),
+                h('p', { className: 'tp-corpus-note', role: 'status', 'aria-atomic': true }, corpusBusy ? t('corpusLoading') : ''))),
           ),
           h('div', { className: 'tp-stats' },
             h(Stat, { label: speedUnit, value: shownSpeed, accent: true, description: isIme ? t('cpmTip') : undefined }),
@@ -2043,22 +2094,29 @@ return module.exports; })();
                   }, t('hintRetry')) : null,
                 ) : null,
               ),
-              h('button', {
-                type: 'button',
-                className: 'tp-btn primary',
-                onClick: () => restart(session.duration, true),
-              }, t(result ? 'restart' : 'restartRun')),
+              h('div', { className: 'tp-run-actions' },
+                h('span', { className: 'tp-action' },
+                  h('button', { type: 'button', className: 'tp-btn tp-quiet tp-corpus-next', onClick: () => nextPassage(),
+                    'aria-label': t(corpusBusy ? 'corpusCancel' : 'corpusNext'), 'aria-describedby': 'tp-next-shortcut',
+                    'aria-keyshortcuts': isApple ? 'Meta+R' : 'Control+R' },
+                    h('span', null, t(corpusBusy ? 'corpusCancel' : 'corpusNext')),
+                    h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusNext')),
+                    h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('corpusCancel'))),
+                  h('span', { className: 'tp-shortcut-tip', id: 'tp-next-shortcut', role: 'tooltip' }, isApple ? '⌘ R' : 'Ctrl+R')),
+                h('span', { className: 'tp-action' },
+                  h('button', { type: 'button', className: 'tp-btn tp-quiet tp-restart', onClick: restartCurrent,
+                    'aria-label': t('restartRun'), 'aria-describedby': 'tp-restart-shortcut', 'aria-keyshortcuts': 'Escape' }, t('restartRun')),
+                  h('span', { className: 'tp-shortcut-tip', id: 'tp-restart-shortcut', role: 'tooltip' }, 'Esc'))),
             ),
           ),
-          h('div', { className: 'tp-foot' },
-            h('span', null, t(session.source ? 'corpusFooter' : 'footerTip')),
+          session.source || exerciseSaveError || corpusPreferenceError || saveError ? h('div', { className: 'tp-foot' },
+            session.source ? h('span', null, t('corpusFooter')) : null,
             exerciseSaveError ? h('span', { className: 'tp-corpus-note tp-preference-error', role: 'status' }, t('exerciseSaveError')) : null,
             corpusPreferenceError ? h('span', { className: 'tp-corpus-note tp-preference-error', role: 'status' }, t('corpusPreferenceError')) : null,
             saveError ? h('span', { className: 'tp-save-error', role: 'status' }, t('storageError')) : null,
-          ),
+          ) : null,
           renderRecords(),
-          renderSound(),
-          renderCursor(),
+          renderSettings(),
         ),
       );
     }

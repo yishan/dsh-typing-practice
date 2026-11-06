@@ -18,6 +18,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
 }), apiFetch, transportFetch, audio = {}) {
   const hooks = [];
   const timers = new Set();
+  const timeouts = new Map();
   const storage = new Map(Object.entries(initialStorage));
   let inputElement;
   let inputKey;
@@ -75,6 +76,9 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     },
     window: {
       AudioContext: audio.AudioContext,
+      navigator: { platform: audio.platform || 'Linux' },
+      setTimeout: (callback, delay) => { timeouts.set(callback, now + delay); return callback; },
+      clearTimeout: callback => timeouts.delete(callback),
       addEventListener: addListener, removeEventListener: removeListener,
       __DSH_TRANSPORT__: transportFetch ? { fetch: transportFetch } : undefined,
       __ModuleLoader__: { load: (module) => { factory = module.factory; } },
@@ -125,7 +129,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       }
       input.props.ref.current = inputElement;
       find(node => node.type === 'dialog').props.ref.current = dialogElement;
-      find(node => node.type === 'dialog' && node.props.className.includes('tp-sound-dialog')).props.ref.current = soundDialog;
+      find(node => node.type === 'dialog' && node.props.className.includes('tp-settings-dialog')).props.ref.current = soundDialog;
       for (const effect of pendingEffects) effect();
     } while (dirty);
   }
@@ -151,9 +155,14 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     key(key, at, options = {}) {
       now = at;
       let prevented = false;
-      find((node) => node.type === 'textarea').props.onKeyDown({
-        key, currentTarget: inputElement, ...options, preventDefault() { prevented = true; }, stopPropagation() {},
-      });
+      let stopped = false;
+      const event = {
+        key, currentTarget: inputElement, target: inputElement, ...options,
+        get defaultPrevented() { return prevented; },
+        preventDefault() { prevented = true; }, stopPropagation() { stopped = true; },
+      };
+      tree.props.onKeyDownCapture(event);
+      if (!stopped) find(node => node.type === 'textarea').props.onKeyDown(event);
       render();
       // Model the browser's default text edit. Browser/IME verification is
       // separate; these tests exercise the shipped component's input handlers.
@@ -168,13 +177,13 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     },
     input: dispatchInput,
     audioLoads,
-    openSound() { find(node => node.type === 'button' && node.children[0] === '音效').props.onClick(); render(); },
+    openSound() { find(node => node.type === 'button' && node.children[0] === '设置').props.onClick(); render(); find(node => node.props.role === 'tab' && node.children[0] === '音效')?.props.onClick(); render(); },
     soundOpen: () => soundDialog.open,
     soundPack(pack) { find(node => node.type === 'select' && node.props['aria-label'] === '声音').props.onChange({ currentTarget: { value: pack } }); render(); },
     soundVolume(volume) { find(node => node.type === 'input' && node.props.type === 'range').props.onChange({ currentTarget: { value: volume } }); render(); },
     previewSound() { find(node => node.type === 'button' && node.children[0] === '试听').props.onClick(); render(); },
-    closeSound() { find(node => node.type === 'dialog' && node.props.className.includes('tp-sound-dialog')).props.onCancel({ preventDefault() {} }); render(); },
-    soundMessage() { return find(node => node.props.role === 'status', find(node => node.type === 'dialog' && node.props.className.includes('tp-sound-dialog')))?.children[0]; },
+    closeSound() { find(node => node.type === 'dialog' && node.props.className.includes('tp-settings-dialog')).props.onCancel({ preventDefault() {} }); render(); },
+    soundMessage() { return find(node => node.props.role === 'status', find(node => node.type === 'dialog' && node.props.className.includes('tp-settings-dialog')))?.children[0]; },
     soundPreference: () => JSON.parse(storage.get('dsh.typing-practice.sound.v1') || 'null'),
     soundValue: () => find(node => node.type === 'select' && node.props['aria-label'] === '声音').props.value,
     focusInput() { dom.activeElement = inputElement; find(node => node.type === 'textarea').props.onFocus({ currentTarget: inputElement }); render(); },
@@ -230,7 +239,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       find(node => node.props.role === 'radio' && node.children[0] === '短篇').props.onClick(); render();
       nextPassage = { text, language, source: { sessionId: 'fixture', seq: 5, role: 'user', fingerprint, title: '示例对话' } };
       const local = find(node => node.type === 'button' && node.children[0] === '本地对话语料');
-      if (local.props['aria-pressed']) await find(node => node.type === 'button' && node.props.className === 'tp-btn tp-corpus-next').props.onClick();
+      if (local.props['aria-pressed']) await find(node => node.type === 'button' && node.props.className?.includes('tp-corpus-next')).props.onClick();
       else { local.props.onClick(); render(); await new Promise(resolve => setImmediate(resolve)); }
       render();
     },
@@ -238,11 +247,24 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     source(label) { find(node => node.type === 'button' && node.children[0] === label).props.onClick(); render(); },
     sourceSelected: label => find(node => node.type === 'button' && node.children[0] === label).props['aria-pressed'],
     preferenceError: () => Boolean(find(node => node.props.className === 'tp-corpus-note tp-preference-error')),
-    nextPassage() { const promise = find(node => node.type === 'button' && node.props.className === 'tp-btn tp-corpus-next').props.onClick(); render(); return promise; },
+    nextPassage() { const promise = find(node => node.type === 'button' && node.props.className?.includes('tp-corpus-next')).props.onClick(); render(); return promise; },
     requests,
-    corpusMessage: () => find(node => node.props.className === 'tp-corpus-note')?.children[0] || undefined,
+    corpusMessage: () => find(node => node.props.className === 'tp-toast')?.children[0] || undefined,
+    toastTimers: () => timeouts.size,
+    shortcutLabel: () => find(node => node.props.id === 'tp-next-shortcut').children[0],
+    shortcutAria: () => find(node => node.props.className?.includes('tp-corpus-next') && node.type === 'button').props['aria-keyshortcuts'],
+    settingsTab: () => find(node => node.props.role === 'tab' && node.props['aria-selected'])?.children[0],
+    settingsTabKey(key) {
+      const tabs = find(node => node.props.role === 'tablist').children.flat(Infinity);
+      let focus = -1;
+      tabs.find(node => node.props['aria-selected']).props.onKeyDown({ key, preventDefault() {},
+        currentTarget: { parentElement: { querySelectorAll: () => tabs.map((_, i) => ({ focus() { focus = i; } })) } } });
+      render(); return focus;
+    },
+    cursorShape(shape) { find(node => node.type === 'select' && node.props['aria-label'] === '形状').props.onChange({ currentTarget: { value: shape } }); render(); },
+    cursorPreference: () => JSON.parse(storage.get('dsh.typing-practice.cursor.v1') || 'null'),
     restart() {
-      find((node) => node.type === 'button' && node.props.className === 'tp-btn primary').props.onClick();
+      find((node) => node.type === 'button' && node.props.className?.includes('tp-restart')).props.onClick();
       render();
     },
     duration(seconds) {
@@ -252,6 +274,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     tick(at) {
       now = at;
       for (const callback of [...timers]) callback();
+      for (const [callback, due] of [...timeouts]) { if (due <= now) { timeouts.delete(callback); callback(); } }
       render();
     },
     refresh: render,
@@ -1195,7 +1218,7 @@ test('audio excludes modifiers, navigation, held repeats, unfocused input and la
   const audio = audioHarness(); const app = mountClient(undefined, {}, false, undefined, undefined, undefined, audio);
   app.openSound(); app.soundPack('mxbrown'); await app.settle(); app.closeSound(); app.focusInput();
   app.key(app.board().text[0], 1000); assert.equal(audio.contexts[0].sources.length, 1);
-  for (const key of ['Tab', 'Shift', 'ArrowLeft', 'Escape', 'Enter']) app.key(key, 1100);
+  for (const key of ['Tab', 'Shift', 'ArrowLeft', 'Enter']) app.key(key, 1100);
   for (const options of [{ repeat: true }, { metaKey: true }, { ctrlKey: true }, { altKey: true }]) app.key('a', 1200, options);
   assert.equal(audio.contexts[0].sources.length, 1);
   app.blurInput(); app.key('a', 1400); assert.equal(audio.contexts[0].sources.length, 1);
@@ -1370,4 +1393,84 @@ test('changing time or passage preset aborts a local request and ignores late re
   await app.settle();
   assert.equal(app.preset(), '中篇'); assert.equal(app.stat('用时'), 0);
   assert.ok(entries.some(entry => entry.language === 'en' && entry.length === 'medium' && entry.text === app.board().text));
+});
+
+test('Escape restarts the same text and clears a running or completed attempt', () => {
+  const app = mountClient();
+  const text = app.board().text;
+  app.key(text[0], 1000);
+  assert.equal(app.key('Escape', 1500), true);
+  assert.equal(app.board().text, text); assert.equal(app.board().typed, '');
+  assert.equal(app.stat('剩余'), 30); assert.equal(app.activeTimers(), 0);
+  app.key(text[0], 2000); app.tick(32000);
+  assert.equal(app.finished(), true);
+  assert.equal(app.key('Escape', 33000), true);
+  assert.equal(app.finished(), false); assert.equal(app.board().text, text);
+  assert.equal(app.records().history.length, 1);
+});
+
+for (const platform of ['MacIntel', 'Win32', 'Linux']) {
+  test(`${platform}: new-passage shortcut uses the platform modifier, rejects repeats and preserves hard reload`, () => {
+    const app = mountClient(undefined, {}, false, undefined, undefined, undefined, { platform });
+    const apple = platform === 'MacIntel';
+    assert.equal(app.shortcutLabel(), apple ? '⌘ R' : 'Ctrl+R');
+    assert.equal(app.shortcutAria(), apple ? 'Meta+R' : 'Control+R');
+    const options = apple ? { metaKey: true } : { ctrlKey: true };
+    let text = app.board().text;
+    app.key('r', 1000, { ...options, repeat: true }); assert.equal(app.board().text, text);
+    app.key('R', 1000, { ...options, shiftKey: true }); assert.equal(app.board().text, text);
+    app.key('r', 1000, apple ? { ctrlKey: true } : { metaKey: true }); assert.equal(app.board().text, text);
+    assert.equal(app.key('r', 1000, options), true); assert.notEqual(app.board().text, text);
+    text = app.board().text;
+    app.restart(); assert.equal(app.board().text, text);
+  });
+}
+
+test('composition and native candidate keys never restart or replace the passage', () => {
+  const app = mountClient(); app.language('中文');
+  const text = app.board().text;
+  app.compose('Start', '', '', 1000); app.compose('Update', 'ni', 'ni', 1100);
+  assert.equal(app.key('Escape', 1200, { isComposing: true }), false);
+  assert.equal(app.key('r', 1200, { ctrlKey: true }), true);
+  assert.equal(app.composing(), true); assert.equal(app.board().text, text);
+  app.compose('End', '你', '你', 1300);
+  app.key('Escape', 1400, { nativeEvent: { keyCode: 229 } }); assert.equal(app.board().typed, '你');
+  app.key('Escape', 1500); assert.equal(app.board().typed, ''); assert.equal(app.board().text, text);
+});
+
+test('settings tabs preserve preferences, stop previews and isolate practice shortcuts', async () => {
+  const audio = audioHarness(); const app = mountClient(undefined, {}, false, undefined, undefined, undefined, audio);
+  app.openSound(); assert.equal(app.settingsTab(), '音效');
+  app.soundPack('cream'); app.soundVolume(40); await app.settle();
+  app.previewSound(); await app.settle(); assert.ok(audio.contexts[0].sources.length);
+  const text = app.board().text;
+  app.key('r', 0, { ctrlKey: true }); assert.equal(app.board().text, text); assert.equal(app.soundOpen(), true);
+  app.key('Escape', 0); assert.equal(app.soundOpen(), true); // Native dialog cancel owns Escape.
+  assert.equal(app.settingsTabKey('ArrowRight'), 1); assert.equal(app.settingsTab(), '光标');
+  assert.ok(audio.contexts[0].sources.every(source => source.stopped));
+  app.cursorShape('outline');
+  assert.equal(app.settingsTabKey('Home'), 0); assert.equal(app.soundValue(), 'cream');
+  assert.equal(app.cursorPreference().shape, 'outline'); assert.equal(app.soundPreference().volume, 40);
+  app.closeSound(); assert.equal(app.soundOpen(), false); assert.equal(app.board().text, text);
+});
+
+test('fallback toasts expire after three seconds, restart their timer on repeat and clean up on unmount', async () => {
+  const app = mountClient(undefined, {}, false, undefined, async () => { throw new Error('unavailable'); });
+  app.source('本地对话语料'); await app.settle();
+  assert.match(app.corpusMessage(), /暂不可用/); assert.equal(app.toastTimers(), 1);
+  app.tick(2999); assert.ok(app.corpusMessage());
+  await app.nextPassage(); await app.settle();
+  app.tick(3000); assert.ok(app.corpusMessage()); assert.equal(app.toastTimers(), 1);
+  app.tick(5999); assert.equal(app.corpusMessage(), undefined); assert.equal(app.toastTimers(), 0);
+  await app.nextPassage(); await app.settle(); assert.equal(app.toastTimers(), 1);
+  app.unmount(); assert.equal(app.toastTimers(), 0);
+});
+
+test('a next-passage shortcut cancels an in-flight local selection without accepting its late result', async () => {
+  let resolve;
+  const app = mountClient(undefined, {}, false, undefined, () => new Promise(done => { resolve = done; }));
+  app.source('本地对话语料'); const text = app.board().text;
+  app.key('r', 1000, { ctrlKey: true }); assert.equal(app.requests[0].options.signal.aborted, true);
+  resolve({ ok: true, json: async () => ({ reason: 'empty' }) }); await app.settle();
+  assert.equal(app.board().text, text); assert.equal(app.corpusMessage(), undefined);
 });
