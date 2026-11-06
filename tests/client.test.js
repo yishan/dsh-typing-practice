@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
@@ -196,13 +197,29 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       find((node) => node.type === 'button' && node.children[0] === label).props.onClick();
       render();
       if (label !== '英文') {
-        find(node => node.type === 'select').props.onChange({ currentTarget: { value: hints } });
+        find(node => node.type === 'select' && ['拼音', '粤拼'].includes(node.props['aria-label'])).props.onChange({ currentTarget: { value: hints } });
         render();
       }
     },
     hints(value) {
-      find(node => node.type === 'select').props.onChange({ currentTarget: { value } });
+      find(node => node.type === 'select' && ['拼音', '粤拼'].includes(node.props['aria-label'])).props.onChange({ currentTarget: { value } });
       render();
+    },
+    mode(value) {
+      find(node => node.props.role === 'radio' && node.children[0] === (value === 'passage' ? '短篇' : '30 秒')).props.onClick(); render();
+    },
+    length(label) {
+      find(node => node.props.role === 'radio' && node.children[0] === label + '篇').props.onClick(); render();
+    },
+    preset: () => find(node => node.props.role === 'radio' && node.props['aria-checked'])?.children[0],
+    presetOptions: () => find(node => node.props.role === 'radiogroup').children.flat(Infinity).map(node => ({ label: node.children[0], checked: node.props['aria-checked'], tabIndex: node.props.tabIndex })),
+    presetKey(key) {
+      const group = find(node => node.props.role === 'radiogroup');
+      const radios = group.children.flat(Infinity);
+      let focusIndex = -1, prevented = false;
+      radios.find(node => node.props['aria-checked']).props.onKeyDown({ key, preventDefault() { prevented = true; },
+        currentTarget: { parentElement: { querySelectorAll: () => radios.map((_, index) => ({ focus() { focusIndex = index; } })) } } });
+      render(); return { focusIndex, prevented };
     },
     retryAnnotations() {
       find(node => node.type === 'button' && node.children[0] === '重试注音').props.onClick();
@@ -210,6 +227,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     },
     async settle() { await new Promise(resolve => setImmediate(resolve)); render(); },
     async usePassage(text, language = 'en', fingerprint = 'a'.repeat(64)) {
+      find(node => node.props.role === 'radio' && node.children[0] === '短篇').props.onClick(); render();
       nextPassage = { text, language, source: { sessionId: 'fixture', seq: 5, role: 'user', fingerprint, title: '示例对话' } };
       const local = find(node => node.type === 'button' && node.children[0] === '本地对话语料');
       if (local.props['aria-pressed']) await find(node => node.type === 'button' && node.props.className === 'tp-btn tp-corpus-next').props.onClick();
@@ -707,8 +725,8 @@ test('conversation passage runs beyond timed duration and completes once without
   assert.equal(app.board().text, 'A short passage.');
   assert.equal(app.inputValue(), '');
   await app.builtin();
-  assert.ok(app.board().text.length >= 1200);
-  assert.equal(app.stat('剩余'), 30);
+  assert.ok(entries.some(entry => entry.language === 'en' && entry.length === 'short' && entry.text === app.board().text));
+  assert.equal(app.stat('用时'), 0);
 });
 
 test('conversation selection and hint changes isolate old IME while retaining the chosen original', async () => {
@@ -722,7 +740,7 @@ test('conversation selection and hint changes isolate old IME while retaining th
   app.input('你好，周末。', 2000);
   assert.equal(app.finished(), true); assert.deepEqual(app.saved('zh', 'current'), {});
   app.language('粤语');
-  assert.notEqual(app.board().text, '你好，周末。'); assert.equal(app.stat('剩余'), 30);
+  assert.notEqual(app.board().text, '你好，周末。'); assert.equal(app.stat('用时'), 0);
 });
 
 test('default source does not request history; local selection uses language and retains preference after fallback', async () => {
@@ -733,7 +751,7 @@ test('default source does not request history; local selection uses language and
   assert.equal(app.requests.length, 0);
   app.source('本地对话语料'); await app.settle();
   assert.match(app.requests[0].url, /language=yue/);
-  assert.ok(app.board().text.length >= 1200);
+  assert.ok(app.board().text.length >= 1200); assert.equal(app.stat('剩余'), 30);
   assert.match(app.corpusMessage(), /未找到/);
   assert.equal(app.sourceSelected('本地对话语料'), true);
   await app.nextPassage(); await app.settle();
@@ -743,7 +761,7 @@ test('default source does not request history; local selection uses language and
 test('failed recent-history request falls back to built-in text without affecting saved scores', async () => {
   const app = mountClient(undefined, {}, false, undefined, async () => { throw new Error('network failure'); });
   app.source('本地对话语料'); await app.settle();
-  assert.ok(app.board().text.length >= 1200);
+  assert.ok(app.board().text.length >= 1200); assert.equal(app.stat('剩余'), 30);
   assert.match(app.corpusMessage(), /暂不可用/);
   assert.deepEqual(app.saved(), {});
 });
@@ -751,7 +769,7 @@ test('failed recent-history request falls back to built-in text without affectin
 test('language change aborts an old local read and selects a passage in the new language', async () => {
   const resolutions = [];
   const app = mountClient(undefined, {}, false, undefined, () => new Promise(done => { resolutions.push(done); }));
-  app.source('本地对话语料');
+  app.length('短'); app.source('本地对话语料');
   app.language('中文', 'current');
   assert.equal(app.requests[0].options.signal.aborted, true);
   assert.match(app.requests[1].url, /language=zh/);
@@ -784,7 +802,7 @@ test('desktop uses the authenticated carrier instead of fetching its static app 
     calls.push({ url, options });
     return { ok: true, json: async () => ({ candidate: { language: 'en', text: 'A local passage.', source: { sessionId: 'desktop' } } }) };
   });
-  app.source('本地对话语料'); await app.settle();
+  app.length('短'); app.source('本地对话语料'); await app.settle();
   assert.equal(app.requests.length, 0);
   assert.match(calls[0].url, /^\/api\/typing-practice\/recent\?language=en/);
   assert.equal(app.board().text, 'A local passage.');
@@ -939,6 +957,93 @@ test('old v3 history stays available and explicitly identifies the previous corp
   assert.equal(app.records().history[1].id, old.id);
   assert.equal(app.records().history[1].corpusVersion, 1);
   assert.equal(app.records().history[0].corpusVersion, 2);
+});
+
+test('built-in passage mode completes whole short, medium and long texts without a timed deadline', async () => {
+  for (const [label, language] of [['英文', 'en'], ['中文', 'zh'], ['粤语', 'yue']]) {
+    const app = mountClient(); app.language(label); app.mode('passage');
+    for (const [sizeLabel, length] of [['短', 'short'], ['中', 'medium'], ['长', 'long']]) {
+      app.length(sizeLabel);
+      const text = app.board().text;
+      const entry = entries.find(entry => entry.language === language && entry.length === length && entry.text === text);
+      assert.ok(entry);
+      app.input(text[0], 1000); app.tick(91000);
+      assert.equal(app.finished(), false); assert.equal(app.stat('用时'), 90);
+      app.input(text, 92000);
+      const record = app.records().history[0];
+      assert.equal(record.mode, 'passage'); assert.equal(record.source, 'builtin');
+      assert.equal(record.passageId, entry.id); assert.equal(record.length, length);
+      assert.equal(record.elapsedMs, 91000); assert.equal(record.status, 'completed');
+      assert.equal(record.duration, null); assert.deepEqual(app.saved(language), {});
+      assert.equal(record.fingerprint, null);
+    }
+  }
+});
+
+test('built-in retries and hint changes retain passage identity; next passage changes the scene', async () => {
+  const app = mountClient(); app.language('中文'); app.mode('passage'); app.length('中');
+  const text = app.board().text, entry = entries.find(entry => entry.text === text);
+  app.input(text[0], 1000); app.input(text, 61000);
+  app.restart(); assert.equal(app.board().text, text);
+  app.input(text[0], 70000); app.input(text, 100000);
+  assert.match(app.comparison(), /近期同篇最佳/);
+  app.hints('all'); await app.settle(); assert.equal(app.board().text, text);
+  app.input(text, 110000);
+  assert.match(app.comparison(), /还没有同篇/);
+  assert.equal(app.records().history[0].passageId, entry.id);
+  app.openRecords(); app.recordAction('同篇记录'); assert.match(app.recordsText(), /此片段的练习/); app.recordsEscape();
+  await app.nextPassage();
+  assert.notEqual(entries.find(row => row.text === app.board().text).family, entry.family);
+});
+
+test('passage preferences and history survive reload, clearing records preserves mode and length', () => {
+  const key = 'dsh.typing-practice.exercise.v2';
+  const app = mountClient(); app.mode('passage'); app.length('长');
+  app.input(app.board().text, 1000);
+  const preference = app.rawStorage(key), records = app.rawStorage('dsh.typing-practice.v3');
+  const reopened = mountClient(undefined, { [key]: preference, 'dsh.typing-practice.v3': records });
+  assert.ok(entries.some(entry => entry.language === 'en' && entry.length === 'long' && entry.text === reopened.board().text));
+  reopened.openRecords(); assert.match(reopened.recordsText(), /长/);
+  reopened.recordAction('清空全部记录'); reopened.recordAction('确认清空');
+  assert.equal(reopened.rawStorage(key), preference);
+  assert.equal(reopened.records().history.length, 0);
+});
+
+test('switching presets invalidates old composition and leaves timed bests intact', () => {
+  const app = mountClient(); app.language('中文');
+  app.input(app.board().text.slice(0, 10), 1000); app.tick(31000);
+  const best = app.saved('zh');
+  app.restart(); app.compose('Start', '', '', 40000); const stale = app.staleInput();
+  app.mode('passage'); app.length('长'); stale('旧文字');
+  assert.equal(app.inputValue(), ''); assert.deepEqual(app.saved('zh'), best);
+  app.mode('timed'); assert.equal(app.stat('剩余'), 30);
+  app.length('长');
+  assert.ok(entries.some(entry => entry.language === 'zh' && entry.length === 'long' && entry.text === app.board().text));
+});
+
+test('changing local length cancels old reads, sends the tier, and falls back to a matching built-in passage', async () => {
+  const resolutions = [];
+  const app = mountClient(undefined, {}, false, undefined, () => new Promise(done => resolutions.push(done)));
+  app.source('本地对话语料'); app.length('长');
+  assert.equal(app.requests[0].options.signal.aborted, true);
+  assert.match(app.requests[1].url, /length=long/);
+  resolutions[0]({ ok: true, json: async () => ({ candidate: { text: 'Late text.', language: 'en', length: 'short', source: { sessionId: 'old' } } }) });
+  await app.settle(); assert.notEqual(app.board().text, 'Late text.');
+  resolutions[1]({ ok: true, json: async () => ({ candidate: null, reason: 'empty' }) });
+  await app.settle();
+  assert.ok(entries.some(entry => entry.language === 'en' && entry.length === 'long' && entry.text === app.board().text));
+  assert.equal(app.sourceSelected('本地对话语料'), true); assert.equal(app.stat('用时'), 0);
+  app.builtin(); assert.equal(app.stat('用时'), 0); assert.equal(app.preset(), '长篇');
+});
+
+test('invalid exercise preferences use defaults and saving failures do not block passage practice', () => {
+  const key = 'dsh.typing-practice.exercise.v2';
+  const invalid = mountClient(undefined, { [key]: JSON.stringify({ version: 1, mode: 'invalid', length: 'unknown' }) });
+  assert.equal(invalid.stat('剩余'), 30);
+  const app = mountClient(undefined, {}, name => name === key);
+  app.mode('passage'); app.length('中'); assert.equal(app.preferenceError(), true);
+  app.input(app.board().text, 1000); assert.equal(app.finished(), true);
+  assert.equal(app.records().history[0].length, 'medium');
 });
 
 test('early completion is recorded separately; restart and language changes do not record unfinished runs', () => {
@@ -1141,4 +1246,128 @@ test('mute, blur and hidden page stop preview; sound preferences tolerate storag
   for (const value of ['{', '{"version":1,"pack":"unknown","volume":-3}', '{"version":5,"pack":"cream","volume":60}']) {
     const restored = mountClient(undefined, { 'dsh.typing-practice.sound.v1': value }); restored.openSound(); assert.equal(restored.soundValue(), 'off');
   }
+});
+
+
+test('unified presets have one selection and one tab stop, with standard radio arrow navigation', () => {
+  const app = mountClient();
+  assert.deepEqual(app.presetOptions().map(item => item.label), ['15 秒', '30 秒', '60 秒', '短篇', '中篇', '长篇']);
+  assert.equal(app.preset(), '30 秒');
+  for (const [key, label, index] of [['ArrowRight', '60 秒', 2], ['ArrowRight', '短篇', 3], ['End', '长篇', 5], ['ArrowRight', '15 秒', 0], ['ArrowLeft', '长篇', 5], ['Home', '15 秒', 0]]) {
+    assert.deepEqual(app.presetKey(key), { focusIndex: index, prevented: true });
+    assert.equal(app.preset(), label);
+    assert.equal(app.presetOptions().filter(item => item.checked).length, 1);
+    assert.equal(app.presetOptions().filter(item => item.tabIndex === 0).length, 1);
+  }
+  assert.deepEqual(app.presetKey('Tab'), { focusIndex: -1, prevented: false });
+});
+
+test('all six presets survive reload and source changes without restoring a hidden second selection', async () => {
+  const key = 'dsh.typing-practice.exercise.v2';
+  for (const preset of ['15', '30', '60', 'short', 'medium', 'long']) {
+    const app = mountClient(undefined, { [key]: JSON.stringify({ version: 2, preset }) });
+    const label = app.preset();
+    app.source('本地对话语料'); await app.settle(); assert.equal(app.preset(), label);
+    app.builtin(); assert.equal(app.preset(), label);
+    const reopened = mountClient(undefined, { [key]: app.rawStorage(key) });
+    assert.equal(reopened.preset(), label);
+    if (Number(preset)) assert.equal(reopened.stat('剩余'), Number(preset));
+    else assert.equal(reopened.stat('用时'), 0);
+  }
+});
+
+test('v1 mode and length migrate once, local legacy defaults preserve passage mode, invalid or 10-second presets default to 30', () => {
+  const key = 'dsh.typing-practice.exercise.v2', legacy = 'dsh.typing-practice.exercise.v1';
+  for (const [old, source, expected] of [
+    [{ version: 1, mode: 'passage', length: 'long' }, 'builtin', '长篇'],
+    [{ version: 1, mode: 'timed', length: 'medium' }, 'builtin', '30 秒'],
+    [{ version: 1, mode: 'timed', length: 'medium' }, 'local', '中篇'],
+    [null, 'local', '短篇'],
+  ]) {
+    const stored = { [legacy]: JSON.stringify(old), 'dsh.typing-practice.preferences.v1': JSON.stringify({ version: 1, source }) };
+    const app = mountClient(undefined, stored);
+    assert.equal(app.preset(), expected);
+    assert.equal(JSON.parse(app.rawStorage(key)).version, 2);
+    assert.equal(app.rawStorage(legacy), JSON.stringify(old));
+  }
+  for (const preset of ['10', 'invalid', null, { mode: 'passage' }]) {
+    assert.equal(mountClient(undefined, { [key]: JSON.stringify({ version: 2, preset }) }).preset(), '30 秒');
+  }
+});
+
+function timedCandidate(language = 'en') {
+  const selected = [];
+  for (const entry of entries.filter(item => item.language === language && item.length === 'short')) {
+    selected.push(entry.text);
+    if (selected.join(' ').length >= 1200) break;
+  }
+  const text = selected.join(' '), hash = text => createHash('sha256').update(text).digest('hex');
+  return { language, mode: 'timed', text, length: null, source: { fingerprint: hash(text), fingerprints: selected.map(hash) } };
+}
+
+test('local timed runs enforce all three deadlines, isolate bests by source and retain history on reload', async () => {
+  const candidate = timedCandidate();
+  const app = mountClient(undefined, {}, false, undefined, async () => ({ ok: true, json: async () => ({ candidate }) }));
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  const builtin = app.records().best['en:30:builtin:plain:2:corpus2'];
+  app.source('本地对话语料'); await app.settle();
+  for (const [index, duration] of [15, 30, 60].entries()) {
+    app.duration(duration); await app.settle();
+    assert.equal(app.board().text, candidate.text); assert.equal(app.stat('剩余'), duration);
+    const start = 100000 + index * 100000;
+    app.input(candidate.text[0], start); app.input(candidate.text.slice(0, 2), start + duration * 1000);
+    const record = app.records().history[0];
+    assert.equal(record.source, 'local'); assert.equal(record.mode, 'timed'); assert.equal(record.duration, duration);
+    assert.equal(record.correct, 1); assert.equal(record.elapsedMs, duration * 1000); assert.equal(record.corpusVersion, null);
+    assert.equal(record.fingerprint, candidate.source.fingerprint);
+    assert.ok(app.records().best[`en:${duration}:local:plain:2`]);
+  }
+  assert.deepEqual(app.records().best['en:30:builtin:plain:2:corpus2'], builtin);
+  const restored = mountClient(undefined, { 'dsh.typing-practice.v3': app.rawStorage('dsh.typing-practice.v3') });
+  restored.openRecords(); assert.match(restored.recordsText(), /本地对话语料/);
+  restored.recordAction('限时最佳'); assert.match(restored.recordsText(), /本地对话语料/);
+  assert.doesNotMatch(app.rawStorage('dsh.typing-practice.v3'), /The bus stop/);
+  const recent = JSON.parse(app.rawStorage('dsh.typing-practice.recent.v1')).local.en;
+  assert.deepEqual(recent, candidate.source.fingerprints);
+  assert.deepEqual(new URL(app.requests.at(-1).url, 'http://localhost').searchParams.getAll('recent'), candidate.source.fingerprints);
+});
+
+test('local timed retry retains prepared text and excludes every current excerpt on next selection', async () => {
+  const candidate = timedCandidate();
+  const app = mountClient(undefined, {}, false, undefined, async () => ({ ok: true, json: async () => ({ candidate }) }));
+  app.source('本地对话语料'); await app.settle();
+  app.input(candidate.text[0], 1000); app.restart();
+  assert.equal(app.board().text, candidate.text); assert.equal(app.requests.length, 1);
+  await app.nextPassage(); await app.settle();
+  const query = new URL(app.requests.at(-1).url, 'http://localhost').searchParams;
+  assert.equal(query.get('mode'), 'timed'); assert.equal(query.get('length'), 'short');
+  assert.deepEqual(query.getAll('exclude'), candidate.source.fingerprints);
+});
+
+test('insufficient or old-host local buffers fall back entirely, retain the selected timer and record actual source', async () => {
+  for (const body of [{ candidate: null, reason: 'insufficient' }, { candidate: { ...timedCandidate(), text: 'Too short.' } },
+    { candidate: { language: 'en', text: timedCandidate().text, source: { sessionId: 'old-host' } } }]) {
+    const app = mountClient(undefined, {}, false, undefined, async () => ({ ok: true, json: async () => body }));
+    app.duration(15); app.source('本地对话语料'); await app.settle();
+    assert.equal(app.preset(), '15 秒'); assert.equal(app.stat('剩余'), 15);
+    assert.equal(app.sourceSelected('本地对话语料'), true); assert.ok(app.board().text.length >= 1200);
+    assert.ok(app.corpusMessage());
+    app.input(app.board().text[0], 1000); app.tick(16000);
+    assert.equal(app.records().history[0].source, 'builtin');
+    assert.ok(app.records().best['en:15:builtin:plain:2:corpus2']);
+    assert.equal(app.records().best['en:15:local:plain:2'], undefined);
+  }
+});
+
+test('changing time or passage preset aborts a local request and ignores late results', async () => {
+  const pending = [];
+  const app = mountClient(undefined, {}, false, undefined, () => new Promise(resolve => pending.push(resolve)));
+  app.source('本地对话语料'); app.duration(60); app.length('中');
+  assert.equal(app.requests.length, 3); assert.ok(app.requests.slice(0, 2).every(item => item.options.signal.aborted));
+  pending[0]({ ok: true, json: async () => ({ candidate: timedCandidate() }) });
+  pending[1]({ ok: true, json: async () => ({ candidate: timedCandidate() }) });
+  pending[2]({ ok: true, json: async () => ({ candidate: null, reason: 'empty' }) });
+  await app.settle();
+  assert.equal(app.preset(), '中篇'); assert.equal(app.stat('用时'), 0);
+  assert.ok(entries.some(entry => entry.language === 'en' && entry.length === 'medium' && entry.text === app.board().text));
 });

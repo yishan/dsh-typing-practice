@@ -43,7 +43,8 @@
     "THIRD_PARTY_NOTICES.md",
     "src/corpus.js",
     "src/corpus-routes.js",
-    "src/text-policy.js"
+    "src/text-policy.js",
+    "src/passage-lengths.js"
   ],
   "dsh": {
     "bundle": {

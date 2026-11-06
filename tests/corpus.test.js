@@ -210,3 +210,66 @@ test('recent and excluded fingerprints are bounded and validated before reading 
   }
   assert.equal(app.reads.length, 0);
 });
+
+test('local extraction honors all three length tiers without splitting a sentence or joining messages', async () => {
+  for (const language of ['en', 'zh', 'yue']) for (const length of ['short', 'medium', 'long']) {
+    const entry = entries.find(entry => entry.language === language && entry.length === length);
+    const result = await extractPassages([user(0, entry.text)], options({ language, length }));
+    assert.equal(result.candidates.length, 1, entry.id);
+    assert.equal(result.candidates[0].text, entry.text);
+    assert.equal(result.candidates[0].length, length);
+  }
+  assert.equal((await extractPassages([user(0, zh), user(1, zh)], options({ length: 'long' }))).candidates.length, 0);
+  await assert.rejects(extractPassages([], options({ length: 'unknown' })), /invalid_options/);
+});
+
+test('local route validates and passes the chosen length to extraction', async () => {
+  const entry = entries.find(entry => entry.id === 'zh-work-02-long');
+  const app = host({ async observeSession(id) { return { header: { id }, events: [user(0, entry.text)] }; } });
+  assert.equal((await app.request('language=zh&length=huge')).status, 400);
+  const body = await (await app.request('language=zh&length=long')).json();
+  assert.equal(body.candidate.text, entry.text); assert.equal(body.candidate.length, 'long');
+});
+
+
+test('timed local batches contain complete distinct excerpts with hashes and satisfy the buffer in every language', async () => {
+  for (const language of ['en', 'zh', 'yue']) {
+    const texts = entries.filter(entry => entry.language === language && entry.length === 'short').map(entry => entry.text);
+    let reads = 0;
+    const app = host({ async observeSession(id) { reads++; return { header: { id }, events: texts.map((text, i) => user(i, text)) }; } });
+    const body = await (await app.request(`language=${language}&mode=timed`)).json();
+    assert.ok(body.candidate.text.length >= 1200); assert.ok(body.candidate.text.length < 1800);
+    assert.equal(body.candidate.mode, 'timed'); assert.equal(body.candidate.length, null);
+    assert.equal(body.candidate.source.fingerprint.length, 64);
+    assert.equal(new Set(body.candidate.source.fingerprints).size, body.candidate.source.fingerprints.length);
+    assert.ok(body.candidate.source.fingerprints.length <= 16);
+    assert.equal(body.candidate.source.sessionId, undefined);
+    assert.equal(body.candidate.source.title, undefined);
+    assert.equal(reads, 1);
+  }
+});
+
+test('timed local search spans chats, excludes the current batch and reuses recent passages only after fresh ones', async () => {
+  const texts = entries.filter(entry => entry.language === 'en' && entry.length === 'short').slice(0, 12).map(entry => entry.text);
+  let reads = 0;
+  const app = host({ async observeSession(id) { reads++; return { header: { id }, events: [user(0, texts[Number(id)])] }; } }, texts.map((_, i) => ({ header: { id: String(i) } })));
+  const first = (await (await app.request('language=en&mode=timed')).json()).candidate;
+  assert.ok(reads >= 4);
+  const query = 'language=en&mode=timed' + first.source.fingerprints.map(hash => '&exclude=' + hash).join('');
+  const second = (await (await app.request(query)).json()).candidate;
+  assert.ok(second); assert.ok(second.source.fingerprints.every(hash => !first.source.fingerprints.includes(hash)));
+  const recent = first.source.fingerprints.map(hash => '&recent=' + hash).join('');
+  assert.ok((await (await app.request('language=en&mode=timed' + recent)).json()).candidate);
+});
+
+test('timed local requests fall back on insufficient text, reject invalid modes and keep bounded scan limits', async () => {
+  assert.equal((await (await host().request('language=zh&mode=timed')).json()).reason, 'insufficient');
+  const app = host();
+  for (const query of ['language=en&mode=unknown', 'language=en&mode=timed&length=long', 'language=en&exclude=bad',
+    'language=en' + ('&exclude=' + 'a'.repeat(64)).repeat(17)]) assert.equal((await app.request(query)).status, 400);
+  assert.equal(app.reads.length, 0);
+  let reads = 0;
+  const scan = host({ async observeSession(id) { reads++; return { header: { id }, events: [user(0)] }; } }, Array.from({ length: 35 }, (_, i) => ({ header: { id: String(i) } })));
+  assert.equal((await (await scan.request('language=zh&mode=timed')).json()).candidate, null);
+  assert.equal(reads, 30);
+});

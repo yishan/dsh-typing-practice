@@ -2,7 +2,8 @@
 // Normalize typography only. Symbols with semantic meaning remain in place
 // so the quality gate rejects their sentence instead of changing its meaning.
 export const LANGUAGES = ['en', 'zh', 'yue'];
-export const LENGTHS = { en: [40, 100], zh: [80, 200], yue: [80, 200] };
+import { PASSAGE_LENGTHS } from './passage-lengths.js';
+export const LENGTHS = PASSAGE_LENGTHS.short;
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 const words = new Intl.Segmenter('en', { granularity: 'word' });
 const cantonese = /我哋|你哋|佢哋|屋企|而家|聽日|尋日|噚日|傾偈|食嘢|唔|冇|咗|嘅|喺|嚟|啲|嗰|咁|佢|嘢|攞|睇|畀/gu;

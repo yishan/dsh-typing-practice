@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { LENGTHS, measure, normalizeText, hasUnsupportedCharacters, qualityIssues, nearDuplicate } from './text-policy.js';
+import { PASSAGE_LENGTHS, TEXT_LENGTHS } from './passage-lengths.js';
 export { LENGTHS, measure, matchesLanguage } from './text-policy.js';
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
@@ -42,8 +43,9 @@ export function proseRuns(markdown) {
   return runs;
 }
 
-export function splitPassages(text, language) {
-  const [min, max] = LENGTHS[language];
+export function splitPassages(text, language, length = 'short') {
+  if (!TEXT_LENGTHS.includes(length) || !Object.hasOwn(LENGTHS, language)) throw new Error('invalid_options');
+  const [min, max] = PASSAGE_LENGTHS[length][language];
   // Canonical text is also the input to length checks, readings and hashes.
   text = normalizeText(text, language);
   if (unsuitable.test(text)) return [];
@@ -70,7 +72,7 @@ export function splitPassages(text, language) {
 }
 
 export async function extractPassages(events, options, signal) {
-  if (!Object.hasOwn(LENGTHS, options.language)) throw new Error('invalid_options');
+  if (!Object.hasOwn(LENGTHS, options.language) || !TEXT_LENGTHS.includes(options.length ?? 'short')) throw new Error('invalid_options');
   const completed = new Set(events.filter(event => event.type === 'turn/end' && event.data?.reason?.kind === 'completed').map(event => event.data.turn));
   const candidates = [];
   const seen = new Set();
@@ -92,13 +94,13 @@ export async function extractPassages(events, options, signal) {
       if (block.text.length > 20000) { limited = true; continue; }
       budget -= block.text.length;
       if (budget < 0) return { candidates, limited: true };
-      for (const run of proseRuns(block.text)) for (const part of splitPassages(run.text, options.language)) {
+      for (const run of proseRuns(block.text)) for (const part of splitPassages(run.text, options.language, options.length)) {
         const fingerprint = createHash('sha256').update(part.text).digest('hex');
         if (seen.has(fingerprint) || candidates.some(item => nearDuplicate(item.text, part.text))) continue;
         seen.add(fingerprint);
         candidates.push({
           id: `${event.seq}:${blockIndex}:${part.start}:${fingerprint.slice(0, 12)}`,
-          text: part.text, language: options.language,
+          text: part.text, language: options.language, length: options.length ?? 'short',
           count: measure(part.text, options.language), chars: [...graphemes.segment(part.text)].length,
           source: { sessionId: options.sessionId, seq: event.seq, time: event.time, role, messageId: message.id,
             blockIndex, lineStart: run.lineStart, lineEnd: run.lineEnd,

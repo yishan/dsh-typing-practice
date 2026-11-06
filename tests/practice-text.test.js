@@ -3,12 +3,14 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import corpus from '../data/passages.json' with { type: 'json' };
-import { entries, selectPractice, CORPUS_VERSION, RECENT_LIMIT } from '../src/practice-text.js';
+import { entries, selectPractice, selectPassage, TEXT_LENGTHS, CORPUS_VERSION, RECENT_LIMIT } from '../src/practice-text.js';
 import { normalizeText, qualityIssues, nearDuplicate } from '../src/text-policy.js';
+import { measure } from '../src/text-policy.js';
+import { PASSAGE_LENGTHS } from '../src/passage-lengths.js';
 import { validateCorpus } from '../scripts/check-corpus.mjs';
 
-test('offline corpus contains 32 distinct, canonical and complete passages per language', () => {
-  assert.deepEqual(validateCorpus(), { en: 32, zh: 32, yue: 32 });
+test('offline corpus contains 96 canonical complete entries per language in three balanced tiers', () => {
+  assert.deepEqual(validateCorpus(), { en: 96, zh: 96, yue: 96 });
 });
 
 test('corpus validation rejects missing provenance, duplicate IDs, short prose, symbols and near duplicates', () => {
@@ -72,7 +74,7 @@ for (const language of ['en', 'zh', 'yue']) {
 }
 
 test('small or exhausted selection pools reuse the oldest first and never loop or duplicate within a run', () => {
-  const ids = entries.filter(entry => entry.language === 'en').map(entry => entry.id);
+  const ids = entries.filter(entry => entry.language === 'en' && entry.length === 'short').map(entry => entry.id);
   assert.equal(selectPractice('en', ids, 1).ids[0], ids[0]);
   const huge = selectPractice('en', ids, 100000);
   assert.deepEqual(huge.ids, ids);
@@ -86,5 +88,38 @@ test('shipped corpus block is self-contained and matches the authored source', (
   assert.deepEqual(JSON.parse(JSON.stringify(shipped.entries)), entries);
   for (const language of ['en', 'zh', 'yue']) {
     assert.deepEqual(JSON.parse(JSON.stringify(shipped.selectPractice(language, [], 1200, () => .2))), selectPractice(language, [], 1200, () => .2));
+    for (const length of TEXT_LENGTHS) assert.deepEqual(JSON.parse(JSON.stringify(shipped.selectPassage(language, { length, random: () => .2 }))), selectPassage(language, { length, random: () => .2 }));
   }
+});
+
+test('each language has 32 complete families with three independently valid length tiers', () => {
+  for (const language of ['en', 'zh', 'yue']) for (const length of TEXT_LENGTHS) {
+    const rows = entries.filter(entry => entry.language === language && entry.length === length);
+    assert.equal(rows.length, 32);
+    for (const entry of rows) {
+      const [min, max] = PASSAGE_LENGTHS[length][language];
+      assert.ok(measure(entry.text, language) >= min && measure(entry.text, language) <= max, entry.id);
+      assert.deepEqual(qualityIssues(entry.text, language), [], entry.id);
+    }
+  }
+});
+
+test('passage selection crosses tiers without repeating a recent scene and exhausts gracefully', () => {
+  const recent = [];
+  for (let i = 0; i < 32; i++) {
+    const selected = selectPassage('zh', { length: TEXT_LENGTHS[i % 3], recent, random: () => 0 });
+    const entry = entries.find(entry => entry.id === selected.passageId);
+    assert.ok(recent.every(id => entries.find(entry => entry.id === id).family !== entry.family));
+    assert.equal(selected.text, entry.text); recent.push(entry.id);
+  }
+  assert.equal(selectPassage('zh', { length: 'long', recent }).passageId, 'zh-travel-01-long');
+  assert.throws(() => selectPassage('zh', { length: 'huge' }), /invalid_length/);
+  assert.throws(() => selectPassage('unknown'), /invalid_language/);
+});
+
+test('timed selection also avoids scenes recently used in passage mode', () => {
+  const recent = entries.filter(entry => entry.language === 'yue' && entry.length === 'long').slice(0, 16).map(entry => entry.id);
+  const chosen = selectPractice('yue', recent).ids;
+  const families = recent.map(id => entries.find(entry => entry.id === id).family);
+  assert.ok(chosen.every(id => !families.includes(entries.find(entry => entry.id === id).family)));
 });
