@@ -33,7 +33,7 @@ window.__ModuleLoader__.load({
       unitSeconds: '秒',
       unitPercent: '%',
       timebarLabel: '本轮进度',
-      focusHint: '点击文本区继续输入',
+      focusHint: '点击或用 Tab 聚焦后输入',
       inputLabel: '打字练习输入区',
       resultTitle: '本轮成绩',
       resultAccuracy: '准确率',
@@ -41,7 +41,8 @@ window.__ModuleLoader__.load({
       resultErrors: '错误',
       newRecordBadge: '新纪录',
       restart: '再来一次',
-      restartHint: '开始打字即计时 · Tab 重开',
+      restartRun: '重新开始',
+      restartHint: '开始打字即计时',
       footerTip: '输入错误可退格修正；最佳成绩只保存在本机浏览器。',
       inputPlaceholder: '',
     };
@@ -61,7 +62,7 @@ window.__ModuleLoader__.load({
       unitSeconds: 's',
       unitPercent: '%',
       timebarLabel: 'Test progress',
-      focusHint: 'Click the text to keep typing',
+      focusHint: 'Click or Tab here to type',
       inputLabel: 'Typing practice input',
       resultTitle: 'Result',
       resultAccuracy: 'Accuracy',
@@ -69,7 +70,8 @@ window.__ModuleLoader__.load({
       resultErrors: 'Errors',
       newRecordBadge: 'New record',
       restart: 'Try again',
-      restartHint: 'Timing starts on the first key · Tab restarts',
+      restartRun: 'Restart',
+      restartHint: 'Timing starts on the first key',
       footerTip: 'Backspace fixes mistakes; best scores stay in this browser.',
       inputPlaceholder: '',
     };
@@ -90,7 +92,7 @@ window.__ModuleLoader__.load({
     function detectLanguage(locale) {
       try {
         const snapshot = locale && locale.getLocale ? locale.getLocale() : null;
-        const id = String(snapshot && (snapshot.id || snapshot.locale || snapshot.current) || '');
+        const id = String(snapshot && (snapshot.active || snapshot.id || snapshot.locale || snapshot.current) || '');
         if (id.toLowerCase().startsWith('en')) return 'en';
       } catch {
         // fall through to the Chinese default
@@ -281,6 +283,7 @@ window.__ModuleLoader__.load({
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
 }
 .tp-title {
   margin: 0;
@@ -330,13 +333,13 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-secondary);
   font-family: inherit;
   font-size: 12.5px;
-  height: 26px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 0 14px;
   border-radius: 7px;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
-.tp-seg-btn:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); }
 .tp-seg-btn.active {
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
@@ -403,16 +406,27 @@ window.__ModuleLoader__.load({
 .tp-board-wrap {
   position: relative;
   border-radius: 10px;
-  min-height: 132px;
+  cursor: text;
+}
+.tp-board-wrap:focus-within, .tp-seg-btn:focus-visible, .tp-btn:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 3px;
+}
+.tp-viewport {
+  height: calc(4 * 1.85em + 4px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  font-size: 21px;
+  line-height: 1.85;
 }
 .tp-board {
-  min-height: 132px;
   padding: 2px;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 21px;
-  line-height: 1.85;
+  font-size: inherit;
+  line-height: inherit;
   letter-spacing: 0.3px;
   user-select: none;
 }
@@ -427,14 +441,16 @@ window.__ModuleLoader__.load({
 .tp-char.caret { box-shadow: inset 2px 0 0 0 var(--dsw-alias-brand-primary); }
 .tp-input {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 2px;
+  left: 2px;
+  width: 1px;
+  height: 1px;
   margin: 0;
   padding: 0;
   border: 0;
   opacity: 0;
   resize: none;
+  pointer-events: none;
   background: transparent;
   color: transparent;
   caret-color: transparent;
@@ -495,12 +511,13 @@ window.__ModuleLoader__.load({
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
-.tp-result-actions { display: flex; gap: 8px; }
+.tp-actions { display: flex; justify-content: flex-end; }
 .tp-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 0 14px;
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 8px;
@@ -510,9 +527,13 @@ window.__ModuleLoader__.load({
   font-size: 12.5px;
   cursor: pointer;
 }
-.tp-btn:hover {
-  background: var(--dsw-alias-bg-layer-2);
-  border-color: var(--dsw-alias-border-l2);
+.tp-seg-btn, .tp-btn, .tp-input { touch-action: manipulation; }
+@media (hover: hover) and (pointer: fine) {
+  .tp-seg-btn:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); }
+  .tp-btn:hover {
+    background: var(--dsw-alias-bg-layer-2);
+    border-color: var(--dsw-alias-border-l2);
+  }
 }
 .tp-btn.primary {
   border-color: var(--dsw-alias-brand-primary);
@@ -531,7 +552,7 @@ window.__ModuleLoader__.load({
   .tp-page { padding: 18px 14px 44px; }
   .tp-title { font-size: 18px; }
   .tp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tp-board { font-size: 18px; }
+  .tp-viewport { font-size: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tp-seg-btn, .tp-timebar-fill { transition: none; }
@@ -539,6 +560,24 @@ window.__ModuleLoader__.load({
 `;
 
     // ---------- board ----------
+
+    function revealCaret(viewport) {
+      if (!viewport) return;
+      const caret = viewport.querySelector('.tp-char.caret');
+      if (!caret) return;
+      const bounds = viewport.getBoundingClientRect();
+      const cursor = caret.getBoundingClientRect();
+      const lineHeight = parseFloat(window.getComputedStyle(viewport).lineHeight);
+      const top = cursor.top - bounds.top - viewport.clientTop;
+      const bottom = cursor.bottom - bounds.top - viewport.clientTop;
+      // Keep a line of context above and below the cursor; scroll only this
+      // viewport so typing never moves the page or the surrounding DSH shell.
+      if (top < lineHeight || bottom > viewport.clientHeight - lineHeight) {
+        const first = viewport.querySelector('.tp-char').getBoundingClientRect();
+        const row = Math.round((cursor.top - first.top) / lineHeight);
+        viewport.scrollTop = Math.max(0, (row - 1) * lineHeight);
+      }
+    }
 
     const TextBoard = React.memo(function TextBoard({ text, typed, caretIndex }) {
       const nodes = [];
@@ -633,6 +672,7 @@ window.__ModuleLoader__.load({
       const [isRecord, setIsRecord] = React.useState(false);
       const [focused, setFocused] = React.useState(false);
       const inputRef = React.useRef(null);
+      const viewportRef = React.useRef(null);
       const bestRef = React.useRef(best);
       const handledResultRef = React.useRef(null);
 
@@ -640,9 +680,25 @@ window.__ModuleLoader__.load({
         bestRef.current = best;
       }, [best]);
 
+      React.useLayoutEffect(() => {
+        if (viewportRef.current) viewportRef.current.scrollTop = 0;
+      }, [session.text]);
+
+      React.useLayoutEffect(() => {
+        revealCaret(viewportRef.current);
+      }, [session.text, session.typed.length]);
+
       React.useEffect(() => {
-        const element = inputRef.current;
-        if (element) element.focus();
+        const viewport = viewportRef.current;
+        if (!viewport || typeof ResizeObserver !== 'function') return undefined;
+        const observer = new ResizeObserver(() => {
+          revealCaret(viewport);
+          if (document.activeElement === inputRef.current) {
+            viewport.parentElement.scrollIntoView({ block: 'nearest' });
+          }
+        });
+        observer.observe(viewport);
+        return () => observer.disconnect();
       }, []);
 
       React.useEffect(() => {
@@ -688,40 +744,34 @@ window.__ModuleLoader__.load({
         setIsRecord(true);
       }, [session.result]);
 
-      function restart(nextDuration) {
+      function restart(nextDuration, focus = false) {
         const duration = nextDuration || session.duration;
         setSession(createSession(duration));
         setIsRecord(false);
-        const element = inputRef.current;
-        if (element) element.focus();
+        if (focus) focusInput();
       }
 
       function handleKeyDown(event) {
         if (event.metaKey || event.ctrlKey || event.altKey) return;
         if (event.isComposing) return;
-        if (event.key === 'Tab' && !event.shiftKey && !event.repeat) {
-          event.preventDefault();
-          event.stopPropagation();
-          restart(session.duration);
-          return;
-        }
         if (session.result) return;
-        if (event.key === 'Backspace') {
-          event.preventDefault();
-          event.stopPropagation();
-          setSession((previous) => {
-            if (previous.result || previous.typed.length === 0) return previous;
-            return { ...previous, typed: previous.typed.slice(0, -1) };
-          });
-          return;
-        }
-        if (event.key.length !== 1) return;
+        const isBackspace = event.key === 'Backspace';
+        if (!isBackspace && event.key.length !== 1) return;
         event.preventDefault();
         event.stopPropagation();
         const character = event.key;
         const now = performance.now();
         setSession((previous) => {
-          if (previous.result || previous.typed.length >= previous.text.length) return previous;
+          if (previous.result) return previous;
+          // Timer callbacks can run late; no edit may change an expired score.
+          if (previous.startAt != null && now - previous.startAt >= previous.duration * 1000) {
+            return finishSession({ ...previous, nowMs: now }, now - previous.startAt);
+          }
+          if (isBackspace) {
+            if (previous.typed.length === 0) return previous;
+            return { ...previous, typed: previous.typed.slice(0, -1), nowMs: now };
+          }
+          if (previous.typed.length >= previous.text.length) return previous;
           const expected = previous.text[previous.typed.length];
           const typed = previous.typed + character;
           const next = {
@@ -738,11 +788,7 @@ window.__ModuleLoader__.load({
 
       function focusInput() {
         const element = inputRef.current;
-        if (element) element.focus();
-      }
-
-      function keepFocus(event) {
-        event.preventDefault();
+        if (element) element.focus({ preventScroll: true });
       }
 
       function clearInput(event) {
@@ -781,11 +827,10 @@ window.__ModuleLoader__.load({
                 type: 'button',
                 className: 'tp-seg-btn' + (duration === session.duration ? ' active' : ''),
                 'aria-pressed': duration === session.duration,
-                onMouseDown: keepFocus,
                 onClick: () => restart(duration),
               }, t('durationOption', { n: duration }))),
             ),
-            h('span', { className: 'tp-toolbar-hint' }, t('restartHint')),
+            h('span', { className: 'tp-toolbar-hint', id: 'tp-start-hint' }, t('restartHint')),
           ),
           h('div', { className: 'tp-stats' },
             h(Stat, { label: t('statsWpm'), value: shownWpm, accent: true }),
@@ -804,6 +849,37 @@ window.__ModuleLoader__.load({
             },
               h('div', { className: 'tp-timebar-fill', style: { width: (progress * 100).toFixed(1) + '%' } }),
             ),
+            h('div', { className: 'tp-board-wrap', onClick: focusInput },
+              h('div', { className: 'tp-viewport', ref: viewportRef, tabIndex: -1 },
+                h(TextBoard, {
+                  text: session.text,
+                  typed: session.typed,
+                  caretIndex: result ? -1 : session.typed.length,
+                }),
+              ),
+              h('textarea', {
+                ref: inputRef,
+                className: 'tp-input',
+                'aria-label': t('inputLabel'),
+                'aria-describedby': 'tp-start-hint',
+                readOnly: Boolean(result),
+                autoComplete: 'off',
+                autoCorrect: 'off',
+                autoCapitalize: 'off',
+                spellCheck: false,
+                onKeyDown: handleKeyDown,
+                onPaste: blockEvent,
+                onDrop: blockEvent,
+                onInput: clearInput,
+                onFocus: (event) => {
+                  setFocused(true);
+                  revealCaret(viewportRef.current);
+                  event.currentTarget.parentElement.scrollIntoView({ block: 'nearest' });
+                },
+                onBlur: () => setFocused(false),
+              }),
+              (!focused && !result) ? h('div', { className: 'tp-focus-hint' }, t('focusHint')) : null,
+            ),
             result ? h('div', { className: 'tp-result', role: 'status', 'aria-live': 'polite' },
               h('div', { className: 'tp-result-title' },
                 h('span', null, t('resultTitle')),
@@ -815,42 +891,17 @@ window.__ModuleLoader__.load({
                 h(ResultItem, { label: t('resultCorrect'), value: result.correct }),
                 h(ResultItem, { label: t('resultErrors'), value: result.wrongKeys }),
               ),
-              h('div', { className: 'tp-result-actions' },
-                h('button', {
-                  type: 'button',
-                  className: 'tp-btn primary',
-                  onMouseDown: keepFocus,
-                  onClick: () => restart(session.duration),
-                }, t('restart')),
-              ),
             ) : null,
-            h('div', { className: 'tp-board-wrap', onClick: focusInput },
-              h(TextBoard, {
-                text: session.text,
-                typed: session.typed,
-                caretIndex: result ? -1 : session.typed.length,
-              }),
-              h('textarea', {
-                ref: inputRef,
-                className: 'tp-input',
-                'aria-label': t('inputLabel'),
-                autoComplete: 'off',
-                autoCorrect: 'off',
-                autoCapitalize: 'off',
-                spellCheck: false,
-                onKeyDown: handleKeyDown,
-                onPaste: blockEvent,
-                onDrop: blockEvent,
-                onInput: clearInput,
-                onFocus: () => setFocused(true),
-                onBlur: () => setFocused(false),
-              }),
-              (!focused && !result) ? h('div', { className: 'tp-focus-hint' }, t('focusHint')) : null,
+            h('div', { className: 'tp-actions' },
+              h('button', {
+                type: 'button',
+                className: 'tp-btn primary',
+                onClick: () => restart(session.duration, true),
+              }, t(result ? 'restart' : 'restartRun')),
             ),
           ),
           h('div', { className: 'tp-foot' },
             h('span', null, t('footerTip')),
-            h('span', null, t('restartHint')),
           ),
         ),
       );
