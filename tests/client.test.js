@@ -7,10 +7,16 @@ const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
 
 // Run the shipped plugin and its component handlers with controlled hooks and
 // clock. This does not emulate DOM focus, layout, or the DSH module loader.
-function mountClient(locale) {
+function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = async () => ({
+  annotate: text => Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part, i) => ({
+    char: part.segment, reading: 'hint', wordStart: i, wordEnd: i + 1,
+  })),
+})) {
   const hooks = [];
   const timers = new Set();
-  const storage = new Map();
+  const storage = new Map(Object.entries(initialStorage));
+  let inputElement;
+  let inputKey;
   let cursor = 0;
   let now = 0;
   let factory;
@@ -50,7 +56,7 @@ function mountClient(locale) {
       __ModuleLoader__: { load: (module) => { factory = module.factory; } },
       localStorage: {
         getItem: (key) => storage.get(key) ?? null,
-        setItem: (key, value) => storage.set(key, value),
+        setItem: (key, value) => { if (failSave) throw new Error('Storage unavailable'); storage.set(key, value); },
       },
       setInterval: (callback) => { timers.add(callback); return callback; },
       clearInterval: (callback) => timers.delete(callback),
@@ -69,10 +75,12 @@ function mountClient(locale) {
       return () => {};
     },
   };
-  factory((name) => {
+  const require = (name) => {
     assert.equal(name, 'react');
     return React;
-  }).apply({ get: (name) => ({ slots, locale })[name], effect: (callback) => callback() });
+  };
+  require.async = loadChunk;
+  factory(require).apply({ get: (name) => ({ slots, locale })[name], effect: (callback) => callback() });
 
   function render() {
     let renders = 0;
@@ -82,6 +90,12 @@ function mountClient(locale) {
       pendingEffects = [];
       dirty = false;
       tree = Page();
+      const input = find((node) => node.type === 'textarea');
+      if (inputKey !== input.props.key) {
+        inputKey = input.props.key;
+        inputElement = { value: '', selectionEnd: 0, blur() {}, focus() {} };
+      }
+      input.props.ref.current = inputElement;
       for (const effect of pendingEffects) effect();
     } while (dirty);
   }
@@ -96,16 +110,62 @@ function mountClient(locale) {
   }
 
   render();
+  function dispatchInput(value, at, inputType = 'insertText', data = null, isComposing = false) {
+    now = at;
+    inputElement.value = value;
+    inputElement.selectionEnd = value.length;
+    find((node) => node.type === 'textarea').props.onInput({ currentTarget: inputElement, nativeEvent: { inputType, data, isComposing } });
+    render();
+  }
   return {
     key(key, at, options = {}) {
       now = at;
       let prevented = false;
       find((node) => node.type === 'textarea').props.onKeyDown({
-        key, ...options, preventDefault() { prevented = true; }, stopPropagation() {},
+        key, currentTarget: inputElement, ...options, preventDefault() { prevented = true; }, stopPropagation() {},
       });
       render();
+      // Model the browser's default text edit. Browser/IME verification is
+      // separate; these tests exercise the shipped component's input handlers.
+      if (!prevented && !options.isComposing && !options.metaKey && !options.ctrlKey && !options.altKey) {
+        if (key.length === 1) dispatchInput(inputElement.value + key, at, 'insertText', key);
+        if (key === 'Backspace') {
+          const chars = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(inputElement.value), p => p.segment);
+          dispatchInput(chars.slice(0, -1).join(''), at, 'deleteContentBackward');
+        }
+      }
       return prevented;
     },
+    input: dispatchInput,
+    compose(type, value, data, at) {
+      now = at;
+      inputElement.value = value;
+      inputElement.selectionEnd = value.length;
+      find((node) => node.type === 'textarea').props['onComposition' + type]({ currentTarget: inputElement, data });
+      render();
+    },
+    staleInput() {
+      const handler = find((node) => node.type === 'textarea').props.onCompositionEnd;
+      const element = inputElement;
+      return value => { element.value = value; handler({ currentTarget: element, data: value }); render(); };
+    },
+    language(label, hints = 'off') {
+      find((node) => node.type === 'button' && node.children[0] === label).props.onClick();
+      render();
+      if (label !== '英文') {
+        find(node => node.type === 'select').props.onChange({ currentTarget: { value: hints } });
+        render();
+      }
+    },
+    hints(value) {
+      find(node => node.type === 'select').props.onChange({ currentTarget: { value } });
+      render();
+    },
+    retryAnnotations() {
+      find(node => node.type === 'button' && node.children[0] === '重试注音').props.onClick();
+      render();
+    },
+    async settle() { await new Promise(resolve => setImmediate(resolve)); render(); },
     restart() {
       find((node) => node.type === 'button' && node.props.className === 'tp-btn primary').props.onClick();
       render();
@@ -123,7 +183,18 @@ function mountClient(locale) {
     board: () => find((node) => typeof node.props.text === 'string').props,
     title: () => find((node) => node.type === 'h1').children[0],
     finished: () => Boolean(find((node) => node.props.className === 'tp-result')),
-    saved: () => JSON.parse(storage.get('dsh.typing-practice.v1') || '{"best":{}}').best,
+    saved: (language = 'en', hints = 'off') => {
+      const best = JSON.parse(storage.get('dsh.typing-practice.v2') || '{"best":{}}').best;
+      return Object.fromEntries(Object.entries(best).filter(([key]) => key.startsWith(language + ':') && key.split(':')[3] === (hints === 'off' ? 'plain' : hints)).map(([key, value]) => [key.split(':')[1], value]));
+    },
+    rawStorage: key => storage.get(key),
+    stat: label => find((node) => node.props.label === label && node.props.value != null)?.props.value,
+    bestText: () => find((node) => node.props.className === 'tp-best').children[0],
+    saveError: () => Boolean(find((node) => node.props.className === 'tp-save-error')),
+    inputValue: () => inputElement.value,
+    readOnly: () => find(node => node.type === 'textarea').props.readOnly,
+    annotationStatus: () => find(node => node.props.className === 'tp-annotation-status')?.children[0]?.children[0],
+    composing: () => Boolean(find((node) => node.props.className === 'tp-composition')),
     activeTimers: () => timers.size,
   };
 }
@@ -141,7 +212,7 @@ for (const duration of [15, 30, 60]) {
     assert.equal(app.board().typed, text.slice(0, 2));
     assert.equal(app.finished(), true);
     assert.equal(app.saved()[duration].accuracy, 1);
-    assert.equal(app.saved()[duration].wpm, Math.round((2 / 5) / (duration / 60)));
+    assert.equal(app.saved()[duration].speed, Math.round((2 / 5) / (duration / 60)));
     assert.equal(app.activeTimers(), 0);
   });
 
@@ -157,7 +228,7 @@ for (const duration of [15, 30, 60]) {
         assert.equal(app.board().typed, typed);
         assert.equal(app.finished(), true);
         assert.equal(app.saved()[duration].accuracy, 0.5);
-        assert.equal(app.saved()[duration].wpm, Math.round((1 / 5) / (duration / 60)));
+        assert.equal(app.saved()[duration].speed, Math.round((1 / 5) / (duration / 60)));
       });
     }
   }
@@ -259,4 +330,295 @@ test('legacy snapshots and absent locale service retain their existing defaults'
     assert.equal(mountClient(fallbackLocale({ [field]: 'en' })).title(), 'Typing practice');
   }
   assert.equal(mountClient().title(), '打字练习');
+});
+
+for (const [label, language] of [['中文', 'zh'], ['粤语', 'yue']]) {
+  test(`${language}: composition time counts, candidate keys do not; a word commits once`, () => {
+    const app = mountClient();
+    app.language(label);
+    const word = app.board().text.slice(0, 4);
+    app.compose('Start', '', '', 500);
+    assert.equal(app.activeTimers(), 0);
+    app.compose('Update', 'ceshi', 'ceshi', 1000);
+    app.input('ceshi', 1001, 'insertCompositionText', 'ceshi', true);
+    for (const key of [' ', '1', 'ArrowDown', 'Backspace', 'Enter']) {
+      assert.equal(app.key(key, 1500, { isComposing: true }), false);
+    }
+    assert.equal(app.board().typed, '');
+    assert.equal(app.stat('错误'), 0);
+    assert.equal(app.activeTimers(), 1);
+    app.compose('End', word, word, 2000);
+    app.input(word, 2001, 'insertFromComposition', word);
+    assert.equal(app.board().typed, word);
+    assert.equal(app.composing(), false);
+    app.tick(31000);
+    assert.equal(app.saved(language)[30].speed, 8);
+    assert.equal(app.saved(language)[30].accuracy, 1);
+    assert.deepEqual(app.saved('en'), {});
+  });
+}
+
+test('cancelled composition restores native text without adding errors or resetting time', () => {
+  const app = mountClient();
+  app.language('中文');
+  app.compose('Start', '', '', 0);
+  app.compose('Update', 'ni', 'ni', 1000);
+  app.compose('End', '', '', 1500);
+  app.input('', 1501, 'deleteCompositionText');
+  assert.equal(app.board().typed, '');
+  assert.equal(app.stat('错误'), 0);
+  assert.equal(app.activeTimers(), 1);
+  const first = app.board().text[0];
+  app.input(first, 2000);
+  app.tick(31000);
+  assert.equal(app.saved('zh')[30].speed, 2);
+  assert.equal(app.saved('zh')[30].accuracy, 1);
+});
+
+test('consecutive identical composition commits both count, but trailing input does not duplicate errors', () => {
+  const app = mountClient();
+  app.language('中文');
+  app.compose('Start', '', '', 900);
+  app.compose('Update', 'ren', 'ren', 1000);
+  app.compose('End', '人', '人', 1100);
+  app.input('人', 1101, 'insertText', '人');
+  app.compose('Start', '人', '', 1200);
+  app.compose('Update', '人ren', 'ren', 1300);
+  app.compose('End', '人人', '人', 1400);
+  app.input('人人', 1401, 'insertText', '人');
+  assert.equal(app.board().typed, '人人');
+  assert.equal(app.stat('错误'), 2);
+});
+
+for (const at of [30999, 31000, 31050]) {
+  test(`IME batch commit at ${at}ms obeys the deadline without a timer tick`, () => {
+    const app = mountClient();
+    app.language('中文');
+    const text = app.board().text.slice(0, 4);
+    app.compose('Start', '', '', 900);
+    app.compose('Update', 'test', 'test', 1000);
+    app.compose('End', text, text, at);
+    app.input(text, at + 1, 'insertFromComposition', text);
+    assert.equal(app.board().typed, at < 31000 ? text : '');
+    assert.equal(app.finished(), true);
+    assert.equal(app.inputValue(), app.board().typed);
+    assert.equal(app.composing(), false);
+  });
+}
+
+test('timer expiry during composition freezes the result while letting the IME finish', () => {
+  const app = mountClient();
+  app.language('粤语');
+  app.compose('Start', '', '', 1000);
+  app.compose('Update', 'ngo', 'ngo', 1100);
+  app.tick(31100);
+  const saved = app.saved('yue');
+  assert.equal(app.finished(), true);
+  app.compose('End', '我', '我', 32000);
+  assert.equal(app.board().typed, '');
+  assert.equal(app.composing(), false);
+  assert.deepEqual(app.saved('yue'), saved);
+});
+
+test('restart invalidates a composition on the old input element', () => {
+  const app = mountClient();
+  app.language('中文');
+  app.compose('Start', '', '', 900);
+  app.compose('Update', 'ni', 'ni', 1000);
+  const finishOldInput = app.staleInput();
+  app.restart();
+  finishOldInput('你');
+  assert.equal(app.board().typed, '');
+  assert.equal(app.activeTimers(), 0);
+  assert.equal(app.composing(), false);
+  app.input(app.board().text[0], 1500);
+  assert.equal(app.board().typed.length, 1);
+});
+
+test('visible characters, rather than UTF-16 code units, determine mistakes and deletion', () => {
+  const app = mountClient();
+  app.language('中文');
+  app.input('𠮷e\u0301', 1000);
+  assert.equal(app.stat('错误'), 2);
+  app.key('Backspace', 1100);
+  assert.equal(app.board().typed, '𠮷');
+  app.key('Backspace', 1200);
+  assert.equal(app.board().typed, '');
+  assert.equal(app.stat('错误'), 2);
+});
+
+test('replacement and correction retain previous mistakes; punctuation is never silently dropped', () => {
+  const app = mountClient();
+  app.language('中文');
+  const word = app.board().text.slice(0, 3);
+  app.input(word[0] + '錯' + word[2], 1000);
+  app.input(word, 1100, 'insertReplacementText', word[1]);
+  assert.equal(app.stat('准确率'), 75);
+  app.input(word + '“”', 1200);
+  assert.equal(app.board().typed, word + '“”');
+  assert.equal(app.stat('错误'), 3);
+});
+
+test('paste input fallback cannot enter a timed score', () => {
+  const app = mountClient();
+  app.language('中文');
+  app.input(app.board().text.slice(0, 40), 1000, 'insertFromPaste');
+  assert.equal(app.board().typed, '');
+  assert.equal(app.inputValue(), '');
+  assert.equal(app.activeTimers(), 0);
+});
+
+test('language switch invalidates old composition and keeps language-specific best scores', () => {
+  const app = mountClient();
+  app.language('中文');
+  app.input(app.board().text[0], 1000);
+  app.tick(31000);
+  const chineseBest = app.saved('zh');
+  app.restart();
+  app.compose('Start', '', '', 32000);
+  app.compose('Update', 'ni', 'ni', 32100);
+  const stale = app.staleInput();
+  app.language('粤语');
+  stale('你');
+  assert.equal(app.board().typed, '');
+  assert.match(app.board().text, /嘅|唔|啲|咗/);
+  app.input(app.board().text.slice(0, 2), 33000);
+  app.tick(63000);
+  assert.equal(app.saved('yue')[30].speed, 4);
+  assert.deepEqual(app.saved('zh'), chineseBest);
+});
+
+test('an early text completion does not become a full-duration best', () => {
+  const app = mountClient();
+  app.language('中文');
+  app.input(app.board().text, 1000);
+  assert.equal(app.finished(), true);
+  assert.deepEqual(app.saved('zh'), {});
+});
+
+test('legacy English scores remain intact and are visibly distinguished', () => {
+  const old = JSON.stringify({ version: 1, best: { 30: { wpm: 85, accuracy: 0.98, at: 123 } } });
+  const app = mountClient(undefined, { 'dsh.typing-practice.v1': old });
+  assert.match(app.bestText(), /旧版最佳 85 WPM/);
+  app.language('中文');
+  assert.equal(app.bestText(), '暂无最佳记录');
+  app.input(app.board().text[0], 1000);
+  app.tick(31000);
+  assert.equal(app.rawStorage('dsh.typing-practice.v1'), old);
+  assert.match(app.bestText(), /最佳 2 字\/分钟/);
+});
+
+test('storage failure is reported without losing the current result', () => {
+  const app = mountClient(undefined, {}, true);
+  app.input(app.board().text[0], 1000);
+  app.tick(31000);
+  assert.equal(app.finished(), true);
+  assert.equal(app.saveError(), true);
+});
+
+const annotationEngine = marker => ({ annotate: text => Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part, i) => ({ char: part.segment, reading: marker, wordStart: i, wordEnd: i + 1 })) });
+
+test('pronunciation loads lazily by language and reuses its engine', async () => {
+  const calls = [];
+  const app = mountClient(undefined, {}, false, async name => { calls.push(name); return annotationEngine(name); });
+  await app.settle();
+  assert.deepEqual(calls, []);
+  app.language('中文', 'current');
+  assert.equal(app.readOnly(), true);
+  app.input('你', 1000);
+  assert.equal(app.board().typed, '');
+  assert.equal(app.activeTimers(), 0);
+  await app.settle();
+  assert.equal(app.board().hints, 'current');
+  assert.equal(app.readOnly(), false);
+  assert.equal(app.board().annotations.length, app.board().text.length);
+  app.restart();
+  await app.settle();
+  assert.deepEqual(calls, ['./client.pinyin.js']);
+  app.language('粤语', 'current');
+  await app.settle();
+  assert.deepEqual(calls, ['./client.pinyin.js', './client.jyutping.js']);
+});
+
+test('hint modes have distinct persistent bests and retain earlier plain scores', async () => {
+  const app = mountClient();
+  app.language('中文');
+  for (const [i, hints] of ['off', 'current', 'all'].entries()) {
+    app.hints(hints);
+    await app.settle();
+    app.input(app.board().text.slice(0, i + 1), 1000 + i * 40000);
+    app.tick(31000 + i * 40000);
+    assert.equal(app.saved('zh', hints)[30].speed, (i + 1) * 2);
+  }
+  const stored = app.rawStorage('dsh.typing-practice.v2');
+  const restored = mountClient(undefined, { 'dsh.typing-practice.v2': stored });
+  restored.language('中文');
+  for (const [i, hints] of ['off', 'current', 'all'].entries()) {
+    restored.hints(hints);
+    await restored.settle();
+    assert.match(restored.bestText(), new RegExp(`最佳 ${(i + 1) * 2} 字/分钟`));
+  }
+});
+
+test('changing hints retains target text but starts a new run and invalidates old IME', async () => {
+  const app = mountClient();
+  app.language('中文', 'current');
+  await app.settle();
+  const text = app.board().text;
+  app.compose('Start', '', '', 1000);
+  app.compose('Update', 'ni', 'ni', 1000);
+  const stale = app.staleInput();
+  app.hints('all');
+  await app.settle();
+  stale('你');
+  assert.equal(app.board().text, text);
+  assert.equal(app.board().typed, '');
+  assert.equal(app.activeTimers(), 0);
+  assert.equal(app.composing(), false);
+  assert.deepEqual(app.saved('zh', 'current'), {});
+});
+
+test('late pronunciation results cannot replace another language', async () => {
+  let completeChinese;
+  const app = mountClient(undefined, {}, false, name => name.includes('pinyin')
+    ? new Promise(resolve => { completeChinese = resolve; }) : Promise.resolve(annotationEngine('yue')));
+  app.language('中文', 'current');
+  await app.settle();
+  app.language('粤语', 'current');
+  await app.settle();
+  completeChinese(annotationEngine('zh'));
+  await app.settle();
+  assert.equal(app.board().annotations[0].reading, 'yue');
+});
+
+test('a failed pronunciation load can retry without starting the timer', async () => {
+  let attempts = 0;
+  const app = mountClient(undefined, {}, false, async () => {
+    if (++attempts === 1) throw new Error('Offline file unavailable');
+    return annotationEngine('ready');
+  });
+  app.language('中文', 'current');
+  await app.settle();
+  assert.match(app.annotationStatus(), /暂时不可用/);
+  assert.equal(app.readOnly(), true);
+  app.retryAnnotations();
+  await app.settle();
+  assert.equal(attempts, 2);
+  assert.equal(app.readOnly(), false);
+  assert.equal(app.activeTimers(), 0);
+});
+
+test('turning hints off permits practice while an earlier load is pending', async () => {
+  let complete;
+  const app = mountClient(undefined, {}, false, () => new Promise(resolve => { complete = resolve; }));
+  app.language('中文', 'current');
+  await app.settle();
+  app.hints('off');
+  app.input(app.board().text[0], 1000);
+  complete(annotationEngine('late'));
+  await app.settle();
+  assert.equal(app.board().annotations, null);
+  assert.equal(app.board().hints, 'off');
+  assert.equal(app.board().typed.length, 1);
+  assert.equal(app.readOnly(), false);
 });

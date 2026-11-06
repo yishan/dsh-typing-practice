@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Typing practice: a timed typing test in the DSH sidebar with live WPM and accuracy.",
+  "description": "English, Chinese and Cantonese typing practice in DSH with native IME input, live speed and local best scores.",
   "license": "MIT",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "build": "node scripts/build.mjs",
+    "prepack": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -33,7 +35,10 @@
     "locale/*.json",
     "icon.svg",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "client.pinyin.js",
+    "client.jyutping.js",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "dsh": {
     "bundle": {
@@ -45,5 +50,12 @@
         "slots"
       ]
     }
+  },
+  "dependencies": {
+    "pinyin-pro": "3.29.5",
+    "to-jyutping": "3.1.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
   }
 }
