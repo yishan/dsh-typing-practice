@@ -151,6 +151,23 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     find((node) => node.type === 'textarea').props.onInput({ currentTarget: inputElement, nativeEvent: { inputType, data, isComposing } });
     render();
   }
+  function openSettings(tab = '注音') {
+    find(node => node.type === 'button' && node.children[0] === '设置').props.onClick();
+    render();
+    find(node => node.props.role === 'tab' && node.children[0] === tab).props.onClick();
+    render();
+  }
+  function closeSettings() {
+    find(node => node.type === 'dialog' && node.props.className.includes('tp-settings-dialog')).props.onCancel({ preventDefault() {} });
+    render();
+  }
+  function setHints(value) {
+    openSettings();
+    assert.equal(soundDialog.open, true, 'pronunciation settings must be available');
+    find(node => node.type === 'select' && node.props['aria-label'] === '拼音／粤拼').props.onChange({ currentTarget: { value } });
+    render();
+    closeSettings();
+  }
   return {
     key(key, at, options = {}) {
       now = at;
@@ -177,12 +194,13 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     },
     input: dispatchInput,
     audioLoads,
-    openSound() { find(node => node.type === 'button' && node.children[0] === '设置').props.onClick(); render(); find(node => node.props.role === 'tab' && node.children[0] === '音效')?.props.onClick(); render(); },
+    openSettings,
+    openSound() { openSettings('音效'); },
     soundOpen: () => soundDialog.open,
     soundPack(pack) { find(node => node.type === 'select' && node.props['aria-label'] === '声音').props.onChange({ currentTarget: { value: pack } }); render(); },
     soundVolume(volume) { find(node => node.type === 'input' && node.props.type === 'range').props.onChange({ currentTarget: { value: volume } }); render(); },
     previewSound() { find(node => node.type === 'button' && node.children[0] === '试听').props.onClick(); render(); },
-    closeSound() { find(node => node.type === 'dialog' && node.props.className.includes('tp-settings-dialog')).props.onCancel({ preventDefault() {} }); render(); },
+    closeSound: closeSettings,
     soundMessage() { return find(node => node.props.role === 'status', find(node => node.type === 'dialog' && node.props.className.includes('tp-settings-dialog')))?.children[0]; },
     soundPreference: () => JSON.parse(storage.get('dsh.typing-practice.sound.v1') || 'null'),
     soundValue: () => find(node => node.type === 'select' && node.props['aria-label'] === '声音').props.value,
@@ -205,15 +223,9 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     language(label, hints = 'off') {
       find((node) => node.type === 'button' && node.children[0] === label).props.onClick();
       render();
-      if (label !== '英文') {
-        find(node => node.type === 'select' && ['拼音', '粤拼'].includes(node.props['aria-label'])).props.onChange({ currentTarget: { value: hints } });
-        render();
-      }
+      if (label !== '英文' && hints !== null) setHints(hints);
     },
-    hints(value) {
-      find(node => node.type === 'select' && ['拼音', '粤拼'].includes(node.props['aria-label'])).props.onChange({ currentTarget: { value } });
-      render();
-    },
+    hints: setHints,
     mode(value) {
       find(node => node.props.role === 'radio' && node.children[0] === (value === 'passage' ? '短篇' : '30 秒')).props.onClick(); render();
     },
@@ -254,6 +266,11 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     shortcutLabel: () => find(node => node.props.id === 'tp-next-shortcut').children[0],
     shortcutAria: () => find(node => node.props.className?.includes('tp-corpus-next') && node.type === 'button').props['aria-keyshortcuts'],
     settingsTab: () => find(node => node.props.role === 'tab' && node.props['aria-selected'])?.children[0],
+    settingsDisabled: () => find(node => node.type === 'button' && node.children[0] === '设置').props.disabled,
+    settingsTabs: () => find(node => node.props.role === 'tablist').children.flat(Infinity).map(node => node.children[0]),
+    hintControl: () => find(node => node.type === 'select' && node.props['aria-label'] === '拼音／粤拼')?.props,
+    hintError: () => find(node => node.props.role === 'status', find(node => node.props.className === 'tp-sound-status tp-hint-status'))?.children[0],
+    privacyInSubtitle: () => Boolean(find(node => node.props.className === 'tp-privacy-note', find(node => node.props.className === 'tp-subtitle'))),
     settingsTabKey(key) {
       const tabs = find(node => node.props.role === 'tablist').children.flat(Infinity);
       let focus = -1;
@@ -671,7 +688,7 @@ test('hint modes have distinct persistent bests and retain earlier plain scores'
   }
 });
 
-test('changing hints retains target text but starts a new run and invalidates old IME', async () => {
+test('settings stay locked during composition; restart then change hints without accepting stale IME', async () => {
   const app = mountClient();
   app.language('中文', 'current');
   await app.settle();
@@ -679,6 +696,9 @@ test('changing hints retains target text but starts a new run and invalidates ol
   app.compose('Start', '', '', 1000);
   app.compose('Update', 'ni', 'ni', 1000);
   const stale = app.staleInput();
+  assert.equal(app.settingsDisabled(), true);
+  app.restart();
+  assert.equal(app.settingsDisabled(), false);
   app.hints('all');
   await app.settle();
   stale('你');
@@ -793,7 +813,7 @@ test('language change aborts an old local read and selects a passage in the new 
   const resolutions = [];
   const app = mountClient(undefined, {}, false, undefined, () => new Promise(done => { resolutions.push(done); }));
   app.length('短'); app.source('本地对话语料');
-  app.language('中文', 'current');
+  app.language('中文', null); // Change language only; opening settings cancels pending selection.
   assert.equal(app.requests[0].options.signal.aborted, true);
   assert.match(app.requests[1].url, /language=zh/);
   const target = app.board().text;
@@ -1123,7 +1143,8 @@ test('history survives remount, retains 100 newest runs and preserves all-time t
 
 test('clearing needs confirmation, is atomic, keeps source preference and does not resurrect legacy scores', () => {
   const preference = '{"version":1,"source":"builtin"}';
-  const initial = { 'dsh.typing-practice.preferences.v1': preference, 'dsh.typing-practice.v1': '{"best":{"30":{"wpm":85,"accuracy":1}}}' };
+  const annotations = '{"version":1,"mode":"all"}';
+  const initial = { 'dsh.typing-practice.preferences.v1': preference, 'dsh.typing-practice.annotations.v1': annotations, 'dsh.typing-practice.v1': '{"best":{"30":{"wpm":85,"accuracy":1}}}' };
   const app = mountClient(undefined, initial);
   app.input(app.board().text[0], 1000); app.tick(31000);
   app.openRecords(); app.recordAction('清空全部记录');
@@ -1133,6 +1154,7 @@ test('clearing needs confirmation, is atomic, keeps source preference and does n
   app.refresh();
   assert.deepEqual(app.records(), { version: 3, best: {}, legacy: {}, history: [] });
   assert.equal(app.rawStorage('dsh.typing-practice.preferences.v1'), preference);
+  assert.equal(app.rawStorage('dsh.typing-practice.annotations.v1'), annotations);
   const restored = mountClient(undefined, { ...initial, 'dsh.typing-practice.v3': app.rawStorage('dsh.typing-practice.v3') });
   assert.equal(restored.bestText(), '暂无最佳记录');
   restored.openRecords(); restored.recordAction('限时最佳'); assert.doesNotMatch(restored.recordsText(), /旧版最佳/);
@@ -1446,12 +1468,98 @@ test('settings tabs preserve preferences, stop previews and isolate practice sho
   const text = app.board().text;
   app.key('r', 0, { ctrlKey: true }); assert.equal(app.board().text, text); assert.equal(app.soundOpen(), true);
   app.key('Escape', 0); assert.equal(app.soundOpen(), true); // Native dialog cancel owns Escape.
-  assert.equal(app.settingsTabKey('ArrowRight'), 1); assert.equal(app.settingsTab(), '光标');
+  assert.equal(app.settingsTabKey('ArrowRight'), 2); assert.equal(app.settingsTab(), '光标');
   assert.ok(audio.contexts[0].sources.every(source => source.stopped));
   app.cursorShape('outline');
-  assert.equal(app.settingsTabKey('Home'), 0); assert.equal(app.soundValue(), 'cream');
+  assert.equal(app.settingsTabKey('Home'), 0); assert.equal(app.settingsTab(), '注音');
+  assert.equal(app.settingsTabKey('ArrowRight'), 1); assert.equal(app.soundValue(), 'cream');
   assert.equal(app.cursorPreference().shape, 'outline'); assert.equal(app.soundPreference().volume, 40);
   app.closeSound(); assert.equal(app.soundOpen(), false); assert.equal(app.board().text, text);
+});
+
+test('pronunciation is always available in the first settings tab with wrapping keyboard navigation', async () => {
+  const app = mountClient();
+  app.openSettings();
+  assert.deepEqual(app.settingsTabs(), ['注音', '音效', '光标']);
+  assert.equal(app.settingsTab(), '注音');
+  assert.equal(app.hintControl().value, 'current');
+  assert.equal(app.settingsTabKey('ArrowLeft'), 2);
+  assert.equal(app.settingsTab(), '光标');
+  assert.equal(app.settingsTabKey('ArrowRight'), 0);
+  assert.equal(app.settingsTabKey('End'), 2);
+  assert.equal(app.settingsTabKey('Home'), 0);
+  app.closeSound();
+  for (const language of ['中文', '粤语']) {
+    app.language(language, 'all');
+    await app.settle();
+    const text = app.board().text;
+    app.openSettings();
+    assert.equal(app.hintControl()['aria-label'], '拼音／粤拼');
+    assert.equal(app.hintControl().value, 'all');
+    app.settingsTabKey('End'); app.settingsTabKey('Home');
+    assert.equal(app.hintControl().value, 'all');
+    app.closeSound();
+    assert.equal(app.board().text, text);
+    app.input(text[0], 1000);
+    assert.equal(app.settingsDisabled(), true);
+    app.restart();
+  }
+});
+
+test('all hint modes persist from English settings and apply to Chinese and Cantonese after remount', async () => {
+  for (const mode of ['off', 'current', 'all']) {
+    const calls = [];
+    const app = mountClient(undefined, {}, false, async name => { calls.push(name); return annotationEngine('ready'); });
+    const text = app.board().text;
+    app.input(text[0], 1000); app.tick(31000);
+    app.hints('off'); app.hints(mode);
+    await app.settle();
+    assert.equal(app.board().hints, 'off');
+    assert.equal(app.board().text, text);
+    assert.equal(app.finished(), true, 'changing the shared setting must not reset an English result');
+    assert.deepEqual(calls, [], 'English preferences must not load a pronunciation engine');
+    const stored = app.rawStorage('dsh.typing-practice.annotations.v1');
+    assert.deepEqual(JSON.parse(stored), { version: 1, mode });
+    const restored = mountClient(undefined, { 'dsh.typing-practice.annotations.v1': stored });
+    restored.openSettings(); assert.equal(restored.hintControl().value, mode); restored.closeSound();
+    for (const language of ['中文', '粤语']) {
+      restored.language(language, null); await restored.settle();
+      assert.equal(restored.board().hints, mode);
+      assert.equal(Boolean(restored.board().annotations), mode !== 'off');
+    }
+    restored.language('英文'); assert.equal(restored.board().hints, 'off');
+    restored.openSettings(); assert.equal(restored.hintControl().value, mode);
+  }
+});
+
+test('invalid hint preferences use the default and failed saves still apply until a successful retry', async () => {
+  const key = 'dsh.typing-practice.annotations.v1';
+  for (const raw of ['broken json', 'null', '{"version":2,"mode":"all"}', '{"version":1,"mode":"invalid"}']) {
+    const app = mountClient(undefined, { [key]: raw });
+    app.openSettings(); assert.equal(app.hintControl().value, 'current');
+  }
+  let fail = true;
+  const app = mountClient(undefined, {}, name => fail && name === key);
+  app.hints('all'); app.openSettings(); assert.match(app.hintError(), /未能保存/); app.closeSound();
+  assert.equal(app.rawStorage(key), undefined);
+  app.language('中文', null); await app.settle(); assert.equal(app.board().hints, 'all');
+  fail = false;
+  app.hints('off'); app.openSettings(); assert.equal(app.hintError(), ''); app.closeSound();
+  assert.equal(JSON.parse(app.rawStorage(key)).mode, 'off');
+  app.language('粤语', null); assert.equal(app.board().hints, 'off');
+});
+
+test('the privacy note stays beside the subtitle for every language and corpus source', async () => {
+  const app = mountClient();
+  assert.equal(app.privacyInSubtitle(), true);
+  await app.usePassage('This local passage is used only within the current practice session.');
+  assert.equal(app.privacyInSubtitle(), true);
+  app.builtin();
+  assert.equal(app.privacyInSubtitle(), true);
+  for (const language of ['中文', '粤语', '英文']) {
+    app.language(language);
+    assert.equal(app.privacyInSubtitle(), true);
+  }
 });
 
 test('fallback toasts expire after three seconds, restart their timer on repeat and clean up on unmount', async () => {

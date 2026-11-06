@@ -92,3 +92,11 @@ test('a clipped DSH host reveals future rows even when the current line is still
   // Here all rows can fit, so reveal the clipped future context on focus.
   assert.equal(state.outerScrolls, 1);
 });
+
+test('focus reveals context hidden by the statistics dock using the scrollable region bounds', () => {
+  const { viewport, state } = scene(56.7);
+  viewport.closest = selector => ({ getBoundingClientRect: () => ({ top: 50, bottom: selector === '.tp-scroll' ? 500 : 600 }) });
+  state.top = 200;
+  context.revealInputRegion(viewport);
+  assert.equal(state.outerScrolls, 1);
+});

@@ -25,6 +25,8 @@ window.__ModuleLoader__.load({
     const CURSOR_SHAPES = ['line', 'underline', 'outline'];
     const LANGUAGES = ['en', 'zh', 'yue'];
     const HINT_MODES = ['off', 'current', 'all'];
+    const HINT_KEY = 'dsh.typing-practice.annotations.v1';
+    const SETTINGS_TABS = ['annotations', 'sound', 'cursor'];
     const RULES_VERSION = 2;
     const DURATIONS = [15, 30, 60];
     const DEFAULT_DURATION = 30;
@@ -103,6 +105,7 @@ window.__ModuleLoader__.load({
       comparePassage: '近期同篇最佳 {speed} {unit} · {acc}% · 本次 {delta} {unit}',
       newPassageRecord: '同篇新纪录',
       settings: '设置', settingsClose: '关闭设置', settingsRunning: '完成或重新开始后可调整设置',
+      annotations: '注音', hintDisplay: '拼音／粤拼', hintSaveError: '注音选项未能保存，下次打开时需要重新选择。', liveStats: '实时输入统计',
       sound: '音效', soundTitle: '键盘音效', soundClose: '关闭音效设置', soundPack: '声音', soundVolume: '音量', soundPreview: '试听',
       sound_off: '关闭', sound_mxblue: 'Cherry MX Blue · 青轴', sound_mxbrown: 'Cherry MX Brown · 茶轴',
       sound_cream: 'NovelKeys Cream · 奶油轴', sound_holypanda: 'Holy Panda · 圣熊猫',
@@ -186,6 +189,7 @@ window.__ModuleLoader__.load({
       comparePassage: 'Recent same-passage best {speed} {unit} · {acc}% · This run {delta} {unit}',
       newPassageRecord: 'New passage best',
       settings: 'Settings', settingsClose: 'Close settings', settingsRunning: 'Finish or restart this run to change settings',
+      annotations: 'Pronunciation', hintDisplay: 'Pinyin / Jyutping', hintSaveError: 'Pronunciation settings could not be saved. Select them again next time.', liveStats: 'Live typing statistics',
       sound: 'Sound', soundTitle: 'Keyboard sounds', soundClose: 'Close sound settings', soundPack: 'Sound', soundVolume: 'Volume', soundPreview: 'Preview',
       sound_off: 'Off', sound_mxblue: 'Cherry MX Blue', sound_mxbrown: 'Cherry MX Brown',
       sound_cream: 'NovelKeys Cream', sound_holypanda: 'Holy Panda',
@@ -441,6 +445,11 @@ return module.exports; })();
         volume: saved?.version === 1 && Number.isFinite(saved.volume) ? Math.max(0, Math.min(100, Math.round(saved.volume))) : 30 };
     }
 
+    function loadHintPreference() {
+      const saved = readStored(HINT_KEY);
+      return saved?.version === 1 && HINT_MODES.includes(saved.mode) ? saved.mode : 'current';
+    }
+
     let audioModule;
     function loadAudioModule() {
       if (!audioModule) audioModule = require.async('./client.audio.js').catch(error => { audioModule = null; throw error; });
@@ -580,7 +589,9 @@ return module.exports; })();
   isolation: isolate;
   height: 100%;
   min-height: 100%;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
@@ -590,10 +601,15 @@ return module.exports; })();
 }
 .tp-root, .tp-root * { box-sizing: border-box; }
 .tp-panel-spark { stroke: var(--dsw-alias-brand-primary); }
+.tp-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+/* Reserve matching classic-scrollbar gutters so both content widths align. */
+.tp-scroll, .tp-stats-dock { scrollbar-gutter: stable both-edges; }
+.tp-stats-dock { flex: none; overflow: hidden; background: var(--dsw-alias-bg-base); }
 .tp-page {
+  width: 100%;
   max-width: 880px;
   margin: 0 auto;
-  padding: 26px 30px 56px;
+  padding: 26px 30px 28px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -606,6 +622,9 @@ return module.exports; })();
   flex-wrap: wrap;
 }
 .tp-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tp-brand { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 340px; }
+.tp-logo { width: 42px; height: 42px; border-radius: 12px; flex: none; display: grid; place-items: center; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); color: var(--dsw-alias-brand-primary); pointer-events: none; user-select: none; }
+.tp-brandtext { min-width: 0; }
 .tp-title {
   margin: 0;
   font-size: 20px;
@@ -614,6 +633,10 @@ return module.exports; })();
   letter-spacing: -0.015em;
 }
 .tp-subtitle {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 12px;
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--dsw-alias-label-secondary);
@@ -673,9 +696,8 @@ return module.exports; })();
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
 }
-.tp-hint-control { display: inline-flex; align-items: center; gap: 8px; color: var(--dsw-alias-label-secondary); }
 .tp-select { position: relative; display: inline-flex; }
-.tp-hint-control select, .tp-records-filter select, .tp-sound-field select {
+.tp-records-filter select, .tp-sound-field select {
   appearance: none;
   -webkit-appearance: none;
   min-height: 44px;
@@ -689,11 +711,10 @@ return module.exports; })();
   cursor: pointer;
 }
 .tp-select-chevron { position: absolute; right: 12px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%); pointer-events: none; }
-.tp-hint-control select:focus-visible, .tp-records-filter select:focus-visible, .tp-sound-field select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
-.tp-hint-control select:disabled { cursor: default; opacity: .55; }
+.tp-records-filter select:focus-visible, .tp-sound-field select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .tp-annotation-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--dsw-alias-label-secondary); }
-.tp-corpus-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-left: auto; max-width: 100%; }
-.tp-corpus-status { display: grid; width: 240px; max-width: 100%; min-width: 0; min-height: 36px; align-items: start; text-align: right; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.tp-corpus-controls { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 100%; }
+.tp-corpus-status { display: grid; width: 0; min-width: 100%; min-height: 36px; align-items: start; text-align: left; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 .tp-corpus-status > *, .tp-instructions > * { grid-area: 1 / 1; margin: 0; overflow-wrap: anywhere; }
 .tp-status-size { visibility: hidden; pointer-events: none; user-select: none; }
 .tp-corpus-name { font-variant-numeric: tabular-nums; }
@@ -703,13 +724,18 @@ return module.exports; })();
 .tp-corpus-note { margin: 0; font-size: 12px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .tp-corpus-note:empty { pointer-events: none; }
 .tp-stats {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 30px max(32px, env(safe-area-inset-bottom));
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 24px;
+  gap: 16px;
 }
 .tp-stat {
   min-width: 0;
   padding: 11px 0 12px;
+  text-align: center;
 }
 .tp-stat-label {
   font-size: 11.5px;
@@ -719,6 +745,7 @@ return module.exports; })();
   margin-top: 2px;
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 3px;
   font-size: 24px;
   line-height: 1.15;
@@ -753,7 +780,7 @@ return module.exports; })();
   background: var(--dsw-alias-brand-primary);
   transition: width 120ms linear;
 }
-.tp-board-wrap { position: relative; cursor: text; margin-block: 14px; }
+.tp-board-wrap { position: relative; cursor: text; }
 .tp-card:focus-within .tp-focus-hint { color: var(--dsw-alias-label-primary); text-decoration: underline; text-underline-offset: 3px; }
 .tp-seg-btn:focus-visible, .tp-btn:focus-visible {
   outline: 2px solid var(--dsw-alias-label-primary);
@@ -925,8 +952,8 @@ return module.exports; })();
 .tp-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .tp-run-actions { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
 .tp-action { position: relative; display: inline-flex; }
-.tp-shortcut-tip { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 10; padding: 5px 9px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font-size: 11.5px; white-space: nowrap; visibility: hidden; opacity: 0; transform: translateY(4px); pointer-events: none; transition: opacity 120ms ease-out, transform 120ms ease-out, visibility 120ms; }
-.tp-action .tp-btn:focus-visible + .tp-shortcut-tip { visibility: visible; opacity: 1; transform: none; transition: none; }
+.tp-shortcut-tip { position: absolute; left: 50%; bottom: calc(100% + 8px); z-index: 10; padding: 5px 9px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font-size: 11.5px; white-space: nowrap; visibility: hidden; opacity: 0; transform: translate(-50%, 4px); pointer-events: none; transition: opacity 120ms ease-out, transform 120ms ease-out, visibility 120ms; }
+.tp-action .tp-btn:focus-visible + .tp-shortcut-tip { visibility: visible; opacity: 1; transform: translate(-50%, 0); transition: none; }
 .tp-instructions { display: grid; min-width: 0; flex: 1; font-size: 11.5px; line-height: 18px; }
 .tp-actions > .tp-btn { flex: none; }
 .tp-btn {
@@ -961,10 +988,10 @@ return module.exports; })();
 .tp-btn.tp-quiet { background: transparent; border-color: transparent; }
 @media (hover: hover) and (pointer: fine) {
   .tp-btn.tp-quiet:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-1); border-color: var(--dsw-alias-border-l2); }
-  .tp-action:hover .tp-shortcut-tip { visibility: visible; opacity: 1; transform: none; }
+  .tp-action:hover .tp-shortcut-tip { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
 }
 .tp-btn.tp-quiet:active:not(:disabled) { background: var(--dsw-alias-bg-layer-2); }
-.tp-toast-layer { position: sticky; top: 12px; height: 0; z-index: 20; display: flex; justify-content: center; pointer-events: none; }
+.tp-toast-layer { position: absolute; inset: 12px 0 auto; height: 0; z-index: 20; display: flex; justify-content: center; pointer-events: none; }
 .tp-toast { max-width: min(560px, calc(100% - 28px)); height: fit-content; margin: 0; padding: 10px 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: 0 4px 18px rgb(0 0 0 / .12); font-size: 12.5px; animation: tp-toast-in 220ms cubic-bezier(.32,.72,0,1), tp-toast-out 160ms 2840ms ease-out forwards; }
 @keyframes tp-toast-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tp-toast-out { to { opacity: 0; transform: translateY(-6px); } }
@@ -973,6 +1000,8 @@ return module.exports; })();
 .tp-records-dialog::backdrop { background: rgb(0 0 0 / .35); }
 .tp-records-header, .tp-records-toolbar, .tp-records-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 20px; flex: none; }
 .tp-records-header h2 { margin: 0; font-size: 18px; }
+.tp-btn.tp-dialog-close { width: 44px; height: 44px; padding: 0; flex: none; justify-content: center; border-radius: 10px; }
+.tp-dialog-close svg { display: block; width: 24px; height: 24px; pointer-events: none; }
 .tp-records-toolbar { padding-top: 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 .tp-records-body { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 20px; }
 .tp-records-footer { border-top: 1px solid var(--dsw-alias-border-l1); }
@@ -1026,9 +1055,10 @@ return module.exports; })();
   color: var(--dsw-alias-label-secondary);
 }
 @media (max-width: 720px) {
-  .tp-page { padding: 18px 14px 44px; }
+  .tp-page { padding: 18px 14px 28px; }
   .tp-title { font-size: 18px; }
-  .tp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tp-stats { padding-inline: 14px; gap: 8px; }
+  .tp-stat-value { font-size: 22px; }
   .tp-viewport { font-size: 18px; }
   .tp-records-header, .tp-records-toolbar, .tp-records-footer { padding-left: 14px; padding-right: 14px; }
   .tp-records-body { padding: 0 14px; }
@@ -1049,7 +1079,7 @@ return module.exports; })();
   .tp-seg-btn, .tp-timebar-fill { transition: none; }
   .tp-root[data-cursor-blink] .tp-char.caret::before { animation: none; }
   .tp-cursor-toggle input::before { transition: none; }
-  .tp-shortcut-tip { transition: none; transform: none; }
+  .tp-shortcut-tip { transition: none; transform: translate(-50%, 0); }
   .tp-toast { animation: none; }
 }
 `;
@@ -1074,7 +1104,7 @@ return module.exports; })();
     function revealInputRegion(viewport) {
       const caret = viewport?.querySelector('[data-input-anchor]');
       if (!caret) return;
-      const host = viewport.closest?.('.tp-root')?.getBoundingClientRect();
+      const host = (viewport.closest?.('.tp-scroll') || viewport.closest?.('.tp-root'))?.getBoundingClientRect();
       const top = Math.max(12, host?.top ?? 0);
       const bottom = Math.min(window.innerHeight - 12, host?.bottom ?? window.innerHeight);
       const region = viewport.getBoundingClientRect();
@@ -1224,7 +1254,7 @@ return module.exports; })();
       const [soundPreference, setSoundPreference] = React.useState(loadSoundPreference);
       const soundPreferenceRef = React.useRef(soundPreference);
       const [settingsOpen, setSettingsOpen] = React.useState(false);
-      const [settingsTab, setSettingsTab] = React.useState('sound');
+      const [settingsTab, setSettingsTab] = React.useState('annotations');
       const [soundStatus, setSoundStatus] = React.useState('idle');
       const [soundSaveError, setSoundSaveError] = React.useState(false);
       const settingsDialogRef = React.useRef(null);
@@ -1235,7 +1265,8 @@ return module.exports; })();
       const [cursorSaveError, setCursorSaveError] = React.useState(false);
       const [focused, setFocused] = React.useState(false);
       const [saveError, setSaveError] = React.useState(false);
-      const [hintPreference, setHintPreference] = React.useState('current');
+      const [hintPreference, setHintPreference] = React.useState(loadHintPreference);
+      const [hintSaveError, setHintSaveError] = React.useState(false);
       const [annotationAttempt, setAnnotationAttempt] = React.useState(0);
       const [corpusBusy, setCorpusBusy] = React.useState(false);
       const [toast, setToast] = React.useState(null);
@@ -1754,11 +1785,18 @@ return module.exports; })();
 
       function closeSettings() { stopSound(); setSettingsOpen(false); }
 
+      function renderDialogClose(label, ref, onClick) {
+        return h('button', { className: 'tp-btn tp-quiet tp-dialog-close', type: 'button', ref, onClick, 'aria-label': label },
+          h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8,
+            strokeLinecap: 'round', 'aria-hidden': true, focusable: false },
+            h('path', { d: 'M5 5 19 19M19 5 5 19' })));
+      }
+
       function changeSettingsTab(tab) { stopSound(); setSettingsTab(tab); }
 
       function settingsKeyDown(event, index) {
-        const tabs = ['sound', 'cursor'];
-        const keys = { ArrowRight: (index + 1) % 2, ArrowLeft: (index + 1) % 2, Home: 0, End: 1 };
+        const tabs = SETTINGS_TABS;
+        const keys = { ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 };
         if (!Object.hasOwn(keys, event.key)) return;
         event.preventDefault();
         changeSettingsTab(tabs[keys[event.key]]);
@@ -1771,15 +1809,37 @@ return module.exports; })();
         return h('dialog', { ...props, 'aria-labelledby': 'tp-settings-title',
           onCancel: event => { event.preventDefault(); closeSettings(); }, onKeyDown: event => event.stopPropagation() },
           h('div', { className: 'tp-records-header' }, h('h2', { id: 'tp-settings-title' }, t('settings')),
-            h('button', { className: 'tp-btn tp-quiet', type: 'button', ref: settingsCloseRef, onClick: closeSettings, 'aria-label': t('settingsClose') }, '×')),
+            renderDialogClose(t('settingsClose'), settingsCloseRef, closeSettings)),
           h('div', { className: 'tp-settings-tabs', role: 'tablist', 'aria-label': t('settings') },
-            ['sound', 'cursor'].map((tab, index) => h('button', { key: tab, id: 'tp-settings-tab-' + tab,
+            SETTINGS_TABS.map((tab, index) => h('button', { key: tab, id: 'tp-settings-tab-' + tab,
               className: 'tp-seg-btn tp-settings-tab', type: 'button', role: 'tab',
               'aria-selected': settingsTab === tab, 'aria-controls': 'tp-settings-panel-' + tab, tabIndex: settingsTab === tab ? 0 : -1,
               onClick: () => changeSettingsTab(tab), onKeyDown: event => settingsKeyDown(event, index) }, t(tab)))),
-          ['sound', 'cursor'].map(tab => h('div', { key: tab, className: 'tp-settings-panel', id: 'tp-settings-panel-' + tab,
+          SETTINGS_TABS.map(tab => h('div', { key: tab, className: 'tp-settings-panel', id: 'tp-settings-panel-' + tab,
             role: 'tabpanel', 'aria-labelledby': 'tp-settings-tab-' + tab, hidden: settingsTab !== tab },
-            settingsTab === tab ? (tab === 'sound' ? renderSound() : renderCursor()) : null)));
+            settingsTab === tab ? (tab === 'annotations' ? renderAnnotations() : tab === 'sound' ? renderSound() : renderCursor()) : null)));
+      }
+
+      function renderAnnotations() {
+        return h('div', { className: 'tp-sound-body' },
+          h('label', { className: 'tp-sound-field' },
+            h('span', null, t('hintDisplay')),
+            h('span', { className: 'tp-select' }, h('select', {
+              value: hintPreference, 'aria-label': t('hintDisplay'), title: session.language === 'en' ? undefined : t('hintChange'),
+              onChange: event => {
+                const hints = event.currentTarget.value;
+                if (!HINT_MODES.includes(hints) || hints === hintPreference && !hintSaveError) return;
+                setHintPreference(hints);
+                try { window.localStorage.setItem(HINT_KEY, JSON.stringify({ version: 1, mode: hints })); setHintSaveError(false); }
+                catch { setHintSaveError(true); }
+                if (session.language !== 'en' && hints !== session.hints) restart(session.duration, false, session.language, hints, session.text);
+              },
+            }, HINT_MODES.map(mode => h('option', { key: mode, value: mode }, t('hint_' + mode)))),
+            h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false },
+              h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
+          h('div', { className: 'tp-sound-status tp-hint-status' },
+            h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('hintSaveError')),
+            h('span', { role: 'status' }, hintSaveError ? t('hintSaveError') : '')));
       }
 
       function changeCursor(patch) {
@@ -1845,7 +1905,7 @@ return module.exports; })();
         },
           h('div', { className: 'tp-records-header' },
             h('h2', { id: 'tp-records-title' }, t('recordsTitle')),
-            h('button', { className: 'tp-btn', type: 'button', ref: recordsCloseRef, onClick: closeRecords, 'aria-label': t('recordsClose') }, '×')),
+            renderDialogClose(t('recordsClose'), recordsCloseRef, closeRecords)),
           !clearConfirm ? h('div', { className: 'tp-records-toolbar' },
             h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('recordsTitle') },
               ['recent', 'best'].map(view => h('button', { type: 'button', key: view,
@@ -1925,11 +1985,15 @@ return module.exports; })();
         'data-cursor-shape': cursorPreference.shape, 'data-cursor-glow': String(cursorPreference.glow), 'data-cursor-blink': String(cursorPreference.blink) },
         h('div', { className: 'tp-toast-layer', role: 'status', 'aria-live': 'polite', 'aria-atomic': true },
           toast ? h('p', { className: 'tp-toast', key: toast.id }, t(toast.message)) : null),
+        h('div', { className: 'tp-scroll' },
         h('div', { className: 'tp-page' },
           h('header', { className: 'tp-header' },
-            h('div', null,
-              h('h1', { className: 'tp-title' }, t('panelTitle')),
-              h('p', { className: 'tp-subtitle' }, t('panelSubtitle')),
+            h('div', { className: 'tp-brand' },
+              h('div', { className: 'tp-logo', 'aria-hidden': true }, h(PanelIcon, { size: 28, active: true })),
+              h('div', { className: 'tp-brandtext' },
+                h('h1', { className: 'tp-title' }, t('panelTitle')),
+                h('p', { className: 'tp-subtitle' }, h('span', null, t('panelSubtitle')),
+                  h('span', { className: 'tp-privacy-note' }, t('corpusFooter')))),
             ),
             h('div', { className: 'tp-header-actions' },
               h('div', { className: 'tp-best', style: { visibility: isPassage ? 'hidden' : 'visible' } },
@@ -1964,23 +2028,6 @@ return module.exports; })();
                   'aria-checked': preset === exercisePreference.preset, tabIndex: preset === exercisePreference.preset ? 0 : -1,
                   onKeyDown: event => exerciseKeyDown(event, index), onClick: () => changeExercise(preset),
                 }, PracticeCorpus.TEXT_LENGTHS.includes(preset) ? t('length_' + preset) : t('durationOption', { n: preset }))))),
-            isIme ? h('label', { className: 'tp-hint-control' },
-              h('span', null, t('hint_' + session.language)),
-              h('span', { className: 'tp-select' }, h('select', {
-                value: session.hints,
-                'aria-label': t('hint_' + session.language),
-                title: t('hintChange'),
-                onChange: event => {
-                  const hints = event.currentTarget.value;
-                  if (!HINT_MODES.includes(hints) || hints === session.hints) return;
-                  setHintPreference(hints);
-                  restart(session.duration, false, session.language, hints, session.text);
-                },
-              }, HINT_MODES.map(mode => h('option', { key: mode, value: mode }, t('hint_' + mode)))),
-                h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false },
-                  h('path', { d: 'M3 4.5 6 7.5 9 4.5' })),
-              ),
-            ) : null,
             ),
             h('div', { className: 'tp-corpus-controls' },
               h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('corpusSource') },
@@ -1996,12 +2043,6 @@ return module.exports; })();
                   style: { visibility: corpusBusy ? 'hidden' : 'visible' } },
                   isPassage || session.source ? (session.source ? t('corpusRecent') : t('corpusBuiltin')) + ' · ' + t('corpusCount', { n: session.target.length }) : ''),
                 h('p', { className: 'tp-corpus-note', role: 'status', 'aria-atomic': true }, corpusBusy ? t('corpusLoading') : ''))),
-          ),
-          h('div', { className: 'tp-stats' },
-            h(Stat, { label: speedUnit, value: shownSpeed, accent: true, description: isIme ? t('cpmTip') : undefined }),
-            h(Stat, { label: t('statsAccuracy'), value: shownAccuracy, unit: t('unitPercent') }),
-            h(Stat, { label: t('statsErrors'), value: result ? result.wrongKeys : session.wrongKeys }),
-            h(Stat, { label: t(isPassage ? 'corpusElapsed' : 'statsRemaining'), value: isPassage ? Math.floor(stats.ms / 1000) : remaining, unit: t('unitSeconds') }),
           ),
           h('div', { className: 'tp-card' },
             h('div', {
@@ -2109,14 +2150,21 @@ return module.exports; })();
                   h('span', { className: 'tp-shortcut-tip', id: 'tp-restart-shortcut', role: 'tooltip' }, 'Esc'))),
             ),
           ),
-          session.source || exerciseSaveError || corpusPreferenceError || saveError ? h('div', { className: 'tp-foot' },
-            session.source ? h('span', null, t('corpusFooter')) : null,
+          exerciseSaveError || corpusPreferenceError || saveError ? h('div', { className: 'tp-foot' },
             exerciseSaveError ? h('span', { className: 'tp-corpus-note tp-preference-error', role: 'status' }, t('exerciseSaveError')) : null,
             corpusPreferenceError ? h('span', { className: 'tp-corpus-note tp-preference-error', role: 'status' }, t('corpusPreferenceError')) : null,
             saveError ? h('span', { className: 'tp-save-error', role: 'status' }, t('storageError')) : null,
           ) : null,
           renderRecords(),
           renderSettings(),
+        )),
+        h('div', { className: 'tp-stats-dock' },
+          h('div', { className: 'tp-stats', role: 'group', 'aria-label': t('liveStats') },
+            h(Stat, { label: speedUnit, value: shownSpeed, accent: true, description: isIme ? t('cpmTip') : undefined }),
+            h(Stat, { label: t('statsAccuracy'), value: shownAccuracy, unit: t('unitPercent') }),
+            h(Stat, { label: t('statsErrors'), value: result ? result.wrongKeys : session.wrongKeys }),
+            h(Stat, { label: t(isPassage ? 'corpusElapsed' : 'statsRemaining'), value: isPassage ? Math.floor(stats.ms / 1000) : remaining, unit: t('unitSeconds') }),
+          ),
         ),
       );
     }
