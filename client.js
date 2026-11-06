@@ -104,6 +104,7 @@ window.__ModuleLoader__.load({
       comparePassage: '近期同篇最佳 {speed} {unit} · {acc}% · 本次 {delta} {unit}',
       newPassageRecord: '同篇新纪录',
       settings: '设置', settingsClose: '关闭设置', settingsRunning: '完成或重新开始后可调整设置',
+      settingsLocalTextNote: '本地语料只读取当前 DSH 的本地对话，用于本次打字练习。对话正文不会上传到网络，也不会额外保存或用于其他用途，你可以放心练习。',
       annotations: '注音', hintDisplay: '拼音／粤拼', hintSaveError: '注音选项未能保存，下次打开时需要重新选择。', liveStats: '实时输入统计',
       sound: '音效', soundTitle: '键盘音效', soundClose: '关闭音效设置', soundPack: '声音', soundVolume: '音量', soundPreview: '试听',
       sound_off: '关闭', sound_mxblue: 'Cherry MX Blue · 青轴', sound_mxbrown: 'Cherry MX Brown · 茶轴',
@@ -188,6 +189,7 @@ window.__ModuleLoader__.load({
       comparePassage: 'Recent same-passage best {speed} {unit} · {acc}% · This run {delta} {unit}',
       newPassageRecord: 'New passage best',
       settings: 'Settings', settingsClose: 'Close settings', settingsRunning: 'Finish or restart this run to change settings',
+      settingsLocalTextNote: 'Local text comes from conversations in your current DSH and is used only for this practice session. Your conversation text is never uploaded, saved as an extra copy, or used for anything else, so you can practice with peace of mind.',
       annotations: 'Pronunciation', hintDisplay: 'Pinyin / Jyutping', hintSaveError: 'Pronunciation settings could not be saved. Select them again next time.', liveStats: 'Live typing statistics',
       sound: 'Sound', soundTitle: 'Keyboard sounds', soundClose: 'Close sound settings', soundPack: 'Sound', soundVolume: 'Volume', soundPreview: 'Preview',
       sound_off: 'Off', sound_mxblue: 'Cherry MX Blue', sound_mxbrown: 'Cherry MX Brown',
@@ -1022,9 +1024,11 @@ return module.exports; })();
 .tp-clear-confirm p { color: var(--dsw-alias-label-secondary); }
 .tp-clear-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
 .tp-settings-dialog { width: min(520px, calc(100vw - 32px)); height: fit-content; }
-.tp-settings-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 20px 24px; display: grid; gap: 24px; }
+.tp-settings-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 20px 24px; display: grid; gap: 12px; }
 .tp-settings-section { min-width: 0; }
+.tp-settings-section + .tp-settings-section, .tp-settings-note { border-top: 1px solid var(--dsw-alias-border-l1); padding-top: 12px; }
 .tp-settings-section h3 { margin: 0 0 12px; font-size: 13px; font-weight: 650; }
+.tp-settings-note { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.7; }
 .tp-sound-body { display: grid; gap: 12px; min-width: 0; }
 .tp-sound-field { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 16px; margin: 0; font-size: 13px; min-width: 0; }
 .tp-sound-field .tp-select, .tp-sound-field select { width: 100%; min-width: 0; }
@@ -1814,7 +1818,8 @@ return module.exports; })();
           h('div', { className: 'tp-settings-content' },
             [['cursor', renderCursor], ['annotations', renderAnnotations], ['sound', renderSound]].map(([section, render]) =>
               h('section', { key: section, className: 'tp-settings-section', 'aria-labelledby': 'tp-settings-' + section },
-                h('h3', { id: 'tp-settings-' + section }, t(section)), render()))));
+                h('h3', { id: 'tp-settings-' + section }, t(section)), render())),
+            h('p', { className: 'tp-settings-note' }, t('settingsLocalTextNote'))));
       }
 
       function renderAnnotations() {

@@ -264,7 +264,8 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     shortcutLabel: () => find(node => node.props.id === 'tp-next-shortcut').children[0],
     shortcutAria: () => find(node => node.props.className?.includes('tp-corpus-next') && node.type === 'button').props['aria-keyshortcuts'],
     settingsDisabled: () => find(node => node.type === 'button' && node.children[0] === '设置').props.disabled,
-    settingsSections: () => find(node => node.props.className === 'tp-settings-content').children.flat(Infinity).map(node => node.children[0].children[0]),
+    settingsSections: () => find(node => node.props.className === 'tp-settings-content').children.flat(Infinity)
+      .filter(node => node.type === 'section').map(node => node.children[0].children[0]),
     hintControl: () => find(node => node.type === 'select' && node.props['aria-label'] === '拼音／粤拼')?.props,
     hintError: () => find(node => node.props.role === 'status', find(node => node.props.className === 'tp-sound-status tp-hint-status'))?.children[0],
     privacyInSubtitle: () => Boolean(find(node => node.props.className === 'tp-privacy-note', find(node => node.props.className === 'tp-subtitle'))),
