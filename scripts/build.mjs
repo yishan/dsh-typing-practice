@@ -3,8 +3,22 @@ import { readFile, writeFile, utimes } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { validateCorpus } from './check-corpus.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+console.log('Corpus:', validateCorpus());
+// Keep the curated text synchronously available, including offline startup.
+// Only this marked block is generated; the rest of client.js is hand-written.
+const practice = await build({ entryPoints: [resolve(root, 'src/practice-text.js')], bundle: true,
+  platform: 'browser', format: 'cjs', target: 'es2022', minify: true, charset: 'utf8', write: false });
+const start = '    // BEGIN GENERATED PRACTICE CORPUS';
+const end = '    // END GENERATED PRACTICE CORPUS';
+const clientPath = resolve(root, 'client.js');
+const client = await readFile(clientPath, 'utf8');
+const from = client.indexOf(start), to = client.indexOf(end);
+if (from < 0 || to <= from) throw new Error('Missing corpus build markers');
+const block = `${start}\n    const PracticeCorpus = (() => { const module = { exports: {} }; const exports = module.exports;\n${practice.outputFiles[0].text}\nreturn module.exports; })();\n${end}`;
+await writeFile(clientPath, client.slice(0, from) + block + client.slice(to + end.length));
 // Each DSH chunk is self-contained. No CDN, runtime ESM, or relative require.
 for (const name of ['pinyin', 'jyutping']) {
   const chunk = `client.${name}.js`;

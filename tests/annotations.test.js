@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { annotate as pinyin } from '../src/pinyin.js';
 import { annotate as jyutping } from '../src/jyutping.js';
 import { alignReadings } from '../src/annotations.js';
+import { entries } from '../src/practice-text.js';
 
 test('Mandarin readings use context and retain tone marks', () => {
   assert.deepEqual(pinyin('银行行走').map(t => t.reading), ['yín', 'háng', 'xíng', 'zǒu']);
@@ -46,12 +47,10 @@ for (const [name, annotate] of Object.entries({ pinyin, jyutping })) {
 }
 
 test('all built-in passages have aligned readings for every Han character', () => {
-  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
-  const passages = vm.runInNewContext('(' + source.match(/const PASSAGES = (\{[\s\S]*?\n    \});/)[1] + ')');
-  for (const [language, rows] of Object.entries(passages)) for (const text of rows) {
+  for (const { id, language, text } of entries.filter(entry => entry.language !== 'en')) {
     const tokens = (language === 'zh' ? pinyin : jyutping)(text);
     assert.equal(tokens.map(t => t.char).join(''), text);
-    assert.deepEqual(tokens.filter(t => /\p{Script=Han}/u.test(t.char) && !t.reading), []);
+    assert.deepEqual(tokens.filter(t => /\p{Script=Han}/u.test(t.char) && !t.reading), [], id);
   }
 });
 

@@ -7,6 +7,7 @@
   "license": "MIT",
   "scripts": {
     "test": "node --test",
+    "check:corpus": "node scripts/check-corpus.mjs",
     "build": "node scripts/build.mjs",
     "prepack": "npm run build"
   },
@@ -41,7 +42,8 @@
     "client.audio.js",
     "THIRD_PARTY_NOTICES.md",
     "src/corpus.js",
-    "src/corpus-routes.js"
+    "src/corpus-routes.js",
+    "src/text-policy.js"
   ],
   "dsh": {
     "bundle": {

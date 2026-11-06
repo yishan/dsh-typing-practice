@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { proseRuns, splitPassages, measure, extractPassages } from '../src/corpus.js';
 import { registerCorpusRoutes } from '../src/corpus-routes.js';
+import { entries } from '../src/practice-text.js';
 
 const zh = '周末我们准备沿着河边散步，看看附近的小店。出门前记得带好雨伞和水，途中可以找个安静的地方休息。大家不必赶时间，慢慢欣赏路上的风景，聊一聊最近遇到的事情。等到太阳下山，我们再一起回家做饭。';
 const yue = '我哋今日諗住早啲出門，去河邊行下睇下風景。你記得帶遮同水，行到攰就搵間茶餐廳坐低飲杯嘢。唔使急住趕路，大家慢慢行，傾下最近遇到嘅事情。等到太陽落山，我哋先一齊返屋企煮飯，食完再收拾廚房。';
@@ -12,7 +13,7 @@ const end = (turn = 1, kind = 'completed') => ({ type: 'turn/end', data: { turn,
 const options = (extra = {}) => ({ sessionId: 'selected', language: 'zh', since: Date.now() - 30 * 86400000, until: Date.now(), ...extra });
 
 test('extracts only human text and completed model replies, never context, reasoning, tool output or failed attempts', async () => {
-  const reply = assistant(3, zh.replace('周末', '明天'));
+  const reply = assistant(3, entries.find(entry => entry.id === 'zh-food-01').text);
   reply.data.message.content.unshift({ type: 'reasoning', text: 'PRIVATE REASONING ' + zh });
   const toolReply = assistant(4, 'TOOL ' + zh);
   toolReply.data.message.content.push({ type: 'tool-call', name: 'exec', arguments: '{}' });
@@ -156,4 +157,56 @@ test('bounded scans rotate rather than repeatedly reading the first 30 unsuitabl
   assert.equal(reads.length, 30);
   await app.request();
   assert.equal(reads[30], '30');
+});
+
+test('normalization precedes segmentation, sizing and fingerprinting for both quote styles', async () => {
+  for (const [language, text] of [['en', en], ['zh', zh], ['yue', yue]]) {
+    const quoted = language === 'en' ? '"' + text + '"' : '“' + text + '”';
+    const alternate = '「' + text + '」\u200b';
+    const one = await extractPassages([user(0, quoted)], options({ language }));
+    const two = await extractPassages([user(1, alternate)], options({ language }));
+    assert.equal(one.candidates.length, 1);
+    assert.equal(two.candidates[0].text, quoted);
+    assert.equal(one.candidates[0].source.fingerprint, two.candidates[0].source.fingerprint);
+    assert.equal(one.candidates[0].count, measure(quoted, language));
+    assert.equal((await extractPassages([user(0, quoted), user(1, alternate)], options({ language }))).candidates.length, 1);
+  }
+});
+
+test('unsupported sentences are boundaries and do not glue short fragments or change hotkey meanings', () => {
+  assert.deepEqual(splitPassages(en + ' Press ⌘ to continue. ' + en, 'en').map(part => part.text), [en, en]);
+  const short = 'We will take a short walk beside the river before lunch.';
+  assert.deepEqual(splitPassages(short + ' Press ⌘ to continue. ' + short, 'en'), []);
+  assert.deepEqual(splitPassages('"' + en, 'en'), []);
+  assert.deepEqual(splitPassages('As mentioned above, ' + en, 'en'), []);
+  assert.deepEqual(splitPassages(zh + '密码：\u200bPRIVATE', 'zh'), []);
+});
+
+test('similar messages are deduplicated while distinct paragraphs survive', async () => {
+  const other = entries.find(entry => entry.id === 'zh-food-01').text;
+  const result = await extractPassages([user(0, zh), user(1, zh.replace('周末', '明天')), user(2, other)], options());
+  assert.equal(result.candidates.length, 2);
+  assert.deepEqual(result.candidates.map(item => item.source.seq), [2, 1]);
+});
+
+test('recent hashes search past a repeated chat, and an exhausted pool reuses the oldest eligible passage', async () => {
+  const other = entries.find(entry => entry.id === 'zh-food-01').text;
+  const fingerprint = async text => (await extractPassages([user(0, text)], options())).candidates[0].source.fingerprint;
+  const old = await fingerprint(zh), fresh = await fingerprint(other);
+  let reads = 0;
+  const make = () => host({ async observeSession(id) { reads++; return { header: { id }, events: [user(0, id === 'first' ? zh : other)] }; } },
+    ['first', 'second'].map(id => ({ header: { id } })));
+  const app = make();
+  assert.equal((await (await app.request('language=zh&recent=' + old)).json()).candidate.source.fingerprint, fresh);
+  assert.equal(reads, 2);
+  assert.equal((await (await make().request(`language=zh&recent=${fresh}&recent=${old}`)).json()).candidate.source.fingerprint, fresh);
+  assert.equal((await (await make().request(`language=zh&recent=${fresh}&recent=${old}&exclude=${fresh}`)).json()).candidate.source.fingerprint, old);
+});
+
+test('recent and excluded fingerprints are bounded and validated before reading chats', async () => {
+  const app = host();
+  for (const query of ['language=zh&recent=private', 'language=zh&exclude=not-a-hash', 'language=zh' + ('&recent=' + 'a'.repeat(64)).repeat(17)]) {
+    assert.equal((await app.request(query)).status, 400);
+  }
+  assert.equal(app.reads.length, 0);
 });

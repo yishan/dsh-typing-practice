@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { createAudioPlayer } from '../src/audio-player.js';
 import { audioHarness, samplePacks } from './helpers/audio-context.js';
+import { entries } from '../src/practice-text.js';
 
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
 
@@ -859,7 +860,7 @@ test('completed runs are recorded once and compare against the best before the c
   assert.equal(app.newRecord(), '新纪录');
 });
 
-test('v3 imports v2 and legacy bests without inventing history or rewriting old storage', () => {
+test('v3 preserves old corpus bests without comparing them with new prose scores or rewriting old storage', () => {
   const v1 = JSON.stringify({ best: { 15: { wpm: 80, accuracy: .98, at: 123 } } });
   const v2 = JSON.stringify({ version: 2, best: { 'en:30:builtin:plain:2': { speed: 4, accuracy: .8, at: 123 } } });
   const app = mountClient(undefined, { 'dsh.typing-practice.v1': v1, 'dsh.typing-practice.v2': v2 });
@@ -869,12 +870,75 @@ test('v3 imports v2 and legacy bests without inventing history or rewriting old 
   app.recordsEscape();
   app.input(app.board().text.slice(0, 10), 1000); app.tick(31000);
   assert.equal(app.saved()[30].accuracy, 1);
-  assert.match(app.comparison(), /此前最佳 4 WPM · 80%/);
+  assert.match(app.comparison(), /首次完成/);
+  assert.equal(app.records().best['en:30:builtin:plain:2'].accuracy, .8);
+  assert.equal(app.records().best['en:30:builtin:plain:2:corpus2'].accuracy, 1);
+  assert.equal(app.records().history[0].corpusVersion, 2);
   assert.equal(app.newRecord(), '新纪录');
   assert.equal(app.records().legacy[15].wpm, 80);
   assert.equal(app.records().history.length, 1);
   assert.equal(app.rawStorage('dsh.typing-practice.v1'), v1);
   assert.equal(app.rawStorage('dsh.typing-practice.v2'), v2);
+});
+
+test('default passages avoid recently displayed paragraphs across changes and page reloads', async () => {
+  const key = 'dsh.typing-practice.recent.v1';
+  const app = mountClient();
+  const first = JSON.parse(app.rawStorage(key)).builtin.en;
+  assert.ok(first.length > 0);
+  await app.nextPassage();
+  assert.ok(first.every(id => !app.board().text.includes(entries.find(entry => entry.id === id).text)));
+  const saved = app.rawStorage(key);
+  const recent = JSON.parse(saved).builtin.en;
+  const reopened = mountClient(undefined, { [key]: saved });
+  assert.ok(recent.every(id => !reopened.board().text.includes(entries.find(entry => entry.id === id).text)));
+  app.language('中文');
+  const chinese = JSON.parse(app.rawStorage(key)).builtin.zh;
+  const before = app.board().text;
+  app.hints('all');
+  assert.equal(app.board().text, before);
+  assert.deepEqual(JSON.parse(app.rawStorage(key)).builtin.zh, chinese);
+  assert.ok(JSON.parse(app.rawStorage(key)).builtin.en.length <= 16);
+});
+
+test('local recent fingerprints persist without text and are sent only to the local corpus route', async () => {
+  const key = 'dsh.typing-practice.recent.v1';
+  const app = mountClient(); app.language('中文');
+  await app.usePassage('你好，周末。', 'zh');
+  await app.usePassage('另一段中文。', 'zh', 'b'.repeat(64));
+  const query = new URL(app.requests.at(-1).url, 'http://localhost').searchParams;
+  assert.equal(query.get('exclude'), 'a'.repeat(64));
+  assert.deepEqual(query.getAll('recent'), ['a'.repeat(64)]);
+  const saved = app.rawStorage(key);
+  assert.deepEqual(JSON.parse(saved).local.zh, ['a'.repeat(64), 'b'.repeat(64)]);
+  assert.doesNotMatch(saved, /你好|另一段|示例对话|sessionId|fixture/);
+  const reopened = mountClient(undefined, { [key]: saved }); reopened.language('中文');
+  await reopened.usePassage('新的片段。', 'zh', 'c'.repeat(64));
+  assert.deepEqual(new URL(reopened.requests.at(-1).url, 'http://localhost').searchParams.getAll('recent'), ['a'.repeat(64), 'b'.repeat(64)]);
+});
+
+test('recent selection tolerates invalid storage and still remembers in memory when saving fails', async () => {
+  const key = 'dsh.typing-practice.recent.v1';
+  const app = mountClient(undefined, { [key]: JSON.stringify({ version: 1, corpusVersion: 999, builtin: { en: ['en-travel-01'] }, local: { en: ['invalid'] } }) });
+  assert.deepEqual(JSON.parse(app.rawStorage(key)).local.en, []);
+  assert.equal(JSON.parse(app.rawStorage(key)).corpusVersion, 2);
+  const blocked = mountClient(undefined, {}, true);
+  const first = entries.filter(entry => entry.language === 'en' && blocked.board().text.includes(entry.text));
+  await blocked.nextPassage();
+  assert.ok(first.every(entry => !blocked.board().text.includes(entry.text)));
+  assert.equal(blocked.rawStorage(key), undefined);
+});
+
+test('old v3 history stays available and explicitly identifies the previous corpus', () => {
+  const old = { id: 'old-run', language: 'en', hints: 'off', rules: 2,
+    mode: 'timed', source: 'builtin', duration: 30, status: 'completed', at: 123,
+    elapsedMs: 30000, speed: 4, accuracy: 1, correct: 10, wrongKeys: 0, keystrokes: 10, targetLength: 1200, fingerprint: null };
+  const app = mountClient(undefined, { 'dsh.typing-practice.v3': JSON.stringify({ version: 3, best: {}, legacy: {}, history: [old] }) });
+  app.openRecords(); assert.match(app.recordsText(), /旧语料/); app.recordsEscape();
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  assert.equal(app.records().history[1].id, old.id);
+  assert.equal(app.records().history[1].corpusVersion, 1);
+  assert.equal(app.records().history[0].corpusVersion, 2);
 });
 
 test('early completion is recorded separately; restart and language changes do not record unfinished runs', () => {

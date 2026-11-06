@@ -1,0 +1,586 @@
+{
+  "version": 2,
+  "license": "MIT",
+  "provenance": {
+    "kind": "original",
+    "description": "Written for typing-practice. No third-party passages or user conversations are included."
+  },
+  "entries": [
+    {
+      "id": "en-travel-01",
+      "language": "en",
+      "topic": "travel",
+      "text": "The bus stop was quieter than usual when we arrived. A notice said that the next bus would leave in ten minutes, so we waited under the shelter. My friend checked the route while I looked for our tickets. When the bus came, we found two seats by the window and watched the town wake up."
+    },
+    {
+      "id": "en-travel-02",
+      "language": "en",
+      "topic": "travel",
+      "text": "We reached the station early enough to buy breakfast before the train left. The bakery near the entrance had just opened, and the bread was still warm. We carried our bags to the platform and checked the departure board. There was no need to rush, so we ate slowly and talked about the journey ahead."
+    },
+    {
+      "id": "en-travel-03",
+      "language": "en",
+      "topic": "travel",
+      "text": "The rain stopped just before we left the museum. \"Let's walk back,\" my sister said, pointing to a quiet street beside the river. We passed a small bookshop and stopped to look through the window. By the time we reached our hotel, the clouds had cleared and the evening light was reflected on the water."
+    },
+    {
+      "id": "en-travel-04",
+      "language": "en",
+      "topic": "travel",
+      "text": "Before setting out for the coast, we checked the weather and packed a light jacket. The path from the village was easy to follow, with signs at each turning. We paused at a bench overlooking the sea and shared some fruit. After a short rest, we continued at a steady pace and reached the beach before noon."
+    },
+    {
+      "id": "en-food-01",
+      "language": "en",
+      "topic": "food",
+      "text": "I wrote a short shopping list before leaving for the market. We already had rice and eggs at home, but we needed vegetables for dinner. At the first stall, I chose a few tomatoes and asked for a paper bag. Buying only what we needed made the journey home lighter and left less food to waste."
+    },
+    {
+      "id": "en-food-02",
+      "language": "en",
+      "topic": "food",
+      "text": "Making soup became easier once I prepared everything before turning on the stove. I washed the vegetables, cut them into small pieces, and placed a bowl nearby for the peelings. While the soup cooked, I cleared the table and set out two spoons. Soon the kitchen was tidy again, and we could sit down to eat."
+    },
+    {
+      "id": "en-food-03",
+      "language": "en",
+      "topic": "food",
+      "text": "Our friends brought different dishes to lunch, so nobody had to prepare the whole meal. I made a salad while another guest warmed the bread. We put everything in the middle of the table and passed the bowls around. The conversation lasted much longer than the meal, and we agreed to meet again the following month."
+    },
+    {
+      "id": "en-food-04",
+      "language": "en",
+      "topic": "food",
+      "text": "A new cafe opened near the library last week. On Saturday morning, I stopped there after returning a book and chose a table away from the door. The owner asked whether the music was too loud. \"It's fine here,\" I replied, then opened my notebook and wrote down a few ideas while waiting for breakfast."
+    },
+    {
+      "id": "en-work-01",
+      "language": "en",
+      "topic": "work",
+      "text": "Before starting the next task, I read through yesterday's notes. One question was still unanswered, so I added it to the meeting agenda instead of guessing. When the team arrived, we settled that point first and divided the remaining work. Everyone left with a clear next step, and the afternoon passed without another long meeting."
+    },
+    {
+      "id": "en-work-02",
+      "language": "en",
+      "topic": "work",
+      "text": "The shared folder had become difficult to use because several files had almost identical names. We agreed on a simple naming rule and moved the older copies into an archive. I tested the arrangement by looking for a report from last month. Finding it quickly showed that the new structure was worth keeping."
+    },
+    {
+      "id": "en-work-03",
+      "language": "en",
+      "topic": "work",
+      "text": "I was about to send the document when I noticed that one date did not match the schedule. Rather than changing it from memory, I checked the original note and corrected both places. A final reading took only a few minutes. After sending the file, I recorded the change so that the next person would understand it."
+    },
+    {
+      "id": "en-work-04",
+      "language": "en",
+      "topic": "work",
+      "text": "A large task felt more manageable after we divided it into smaller parts. We began with the section that had the fewest unknowns and used it to check our approach. The first attempt revealed a missing step, which we added to the plan. Progress was slower that morning, but the remaining work became much clearer."
+    },
+    {
+      "id": "en-learning-01",
+      "language": "en",
+      "topic": "learning",
+      "text": "I keep a small notebook beside me when learning something new. Instead of copying every sentence, I write down the main idea and one example that makes sense to me. At the end of the day, I try to explain the idea without looking. Any part I cannot explain becomes a question for the next session."
+    },
+    {
+      "id": "en-learning-02",
+      "language": "en",
+      "topic": "learning",
+      "text": "The first exercise looked simple, but I made the same mistake twice. I stopped, compared my answer with the instructions, and found that I had skipped a small detail. On the next attempt, I worked more slowly and checked each step. Getting it right helped more than finishing quickly with the same error."
+    },
+    {
+      "id": "en-learning-03",
+      "language": "en",
+      "topic": "learning",
+      "text": "Our study group meets in the library once a week. Each person brings one question and takes a turn explaining how they approached it. Sometimes a clear example helps more than a long explanation. Before leaving, we choose a small task to try on our own and discuss the results at the next meeting."
+    },
+    {
+      "id": "en-learning-04",
+      "language": "en",
+      "topic": "learning",
+      "text": "I wanted to practise a little every day, so I chose a time that already fitted my routine. After breakfast, I spent ten minutes reviewing a short lesson before opening other apps. Some days were easier than others, but the small sessions added up. Keeping the task simple made it easier to return the following morning."
+    },
+    {
+      "id": "en-reading-01",
+      "language": "en",
+      "topic": "reading",
+      "text": "The book I borrowed had a map printed inside the front cover. At first I skipped it, but later I found myself turning back to follow the characters' journey. The place names began to feel familiar after a few chapters. I read more slowly than usual and enjoyed noticing how each scene connected to the next."
+    },
+    {
+      "id": "en-reading-02",
+      "language": "en",
+      "topic": "reading",
+      "text": "At the library, a display of staff recommendations caught my attention. I picked up a short book about a subject I knew little about and read the opening page. The writing was clear enough to draw me in without a long introduction. I borrowed it along with the novel I had originally come to find."
+    },
+    {
+      "id": "en-reading-03",
+      "language": "en",
+      "topic": "reading",
+      "text": "A friend and I decided to read the same story over the weekend. When we met on Monday, we discovered that we had noticed completely different details. One conversation that I barely remembered had changed her view of the ending. Talking about the story made me want to read that part again with more care."
+    },
+    {
+      "id": "en-reading-04",
+      "language": "en",
+      "topic": "reading",
+      "text": "I used to leave bookmarks in several unfinished books at once. This month, I chose one to keep beside my chair and put the others back on the shelf. Reading a few pages each evening made the story easier to follow. When I reached the end, I wrote a short note about the part I liked best."
+    },
+    {
+      "id": "en-home-01",
+      "language": "en",
+      "topic": "home",
+      "text": "The light by my desk was too far from the page, so I moved the lamp before starting work. I also cleared away a stack of old papers and left only the things I needed. The room itself had not changed much, but the desk felt easier to use. I could find a pen without moving everything else."
+    },
+    {
+      "id": "en-home-02",
+      "language": "en",
+      "topic": "home",
+      "text": "We set aside a rainy afternoon to sort the cupboard in the hall. Empty boxes went into one pile, useful things into another, and items to give away into a third. A missing scarf turned up behind an old bag. By the end, there was enough room to close the door without pushing anything inside."
+    },
+    {
+      "id": "en-home-03",
+      "language": "en",
+      "topic": "home",
+      "text": "A small plant on the windowsill began leaning towards the light. I turned its pot a little and moved the books that were shading one side. Over the next few days, I paid closer attention to the leaves and the soil. Looking after that one corner made me notice more about the room around it."
+    },
+    {
+      "id": "en-home-04",
+      "language": "en",
+      "topic": "home",
+      "text": "Before going to bed, I put my keys and bag in the same place near the door. I checked what I would need in the morning and filled a bottle with water. The routine took only a moment, but it saved a search through the house the next day. I left home with time to spare."
+    },
+    {
+      "id": "en-hobbies-01",
+      "language": "en",
+      "topic": "hobbies",
+      "text": "I took my camera on a walk without planning to visit anywhere special. At the corner of our street, sunlight fell across an old wall and made a pattern of shadows. I waited for a person to pass, then took a photograph. The picture reminded me that familiar places can look different when I slow down."
+    },
+    {
+      "id": "en-hobbies-02",
+      "language": "en",
+      "topic": "hobbies",
+      "text": "Our local team practised passing before playing a short game. We began close together, then moved farther apart once everyone found a comfortable rhythm. A few passes went wide, but we collected the ball and tried again. By the end of the session, the quieter players were asking for the ball more often."
+    },
+    {
+      "id": "en-hobbies-03",
+      "language": "en",
+      "topic": "hobbies",
+      "text": "I had not drawn for years, so I began with a cup on the kitchen table. The first sketch looked uneven, but I could see where the handle needed to move. I tried again on a fresh page and noticed more of the shape. Keeping both drawings helped me see a small improvement instead of only the mistakes."
+    },
+    {
+      "id": "en-hobbies-04",
+      "language": "en",
+      "topic": "hobbies",
+      "text": "We chose a simple board game for an evening with friends. One person read the rules aloud while the rest of us set out the pieces. After a practice round, everyone understood what to do. We played several short games, changed seats between rounds, and laughed when a plan failed in an unexpected way."
+    },
+    {
+      "id": "en-nature-01",
+      "language": "en",
+      "topic": "nature",
+      "text": "On the way to work, I passed the same tree every morning without paying much attention. One day, a few new leaves caught the light above the pavement. I began looking up as I walked past and noticed the branches changing over the following weeks. A familiar route became a little more interesting."
+    },
+    {
+      "id": "en-nature-02",
+      "language": "en",
+      "topic": "nature",
+      "text": "The park was quiet after the rain, with small puddles along the path. We walked around them and watched a bird searching the grass near a bench. Farther ahead, the clouds opened enough for sunlight to reach the pond. We stayed there for a few minutes before continuing our walk towards the gate."
+    },
+    {
+      "id": "en-nature-03",
+      "language": "en",
+      "topic": "nature",
+      "text": "We visited the community garden on a cool Sunday morning. A volunteer showed us where the paths ended and asked us to stay clear of the young plants. We helped carry empty pots to a shed and swept the steps near the entrance. Before leaving, we sat outside and enjoyed the quieter part of the morning."
+    },
+    {
+      "id": "en-nature-04",
+      "language": "en",
+      "topic": "nature",
+      "text": "The wind became stronger as we climbed the last part of the hill. At the top, we put on our jackets and found a sheltered place to rest. The fields below looked smaller than we expected from the path. We ate our lunch, checked the time, and started down while there was still plenty of daylight."
+    },
+    {
+      "id": "zh-travel-01",
+      "language": "zh",
+      "topic": "travel",
+      "text": "早上出门时，我发现公交站比平时安静。站牌显示下一班车还有一会儿才到，于是我走到雨棚下，把车票和水杯放进容易拿到的位置。车来了以后，我找到一个靠窗的座位，看着街边的店铺陆续开门，原本有些匆忙的心情也慢慢平静下来。"
+    },
+    {
+      "id": "zh-travel-02",
+      "language": "zh",
+      "topic": "travel",
+      "text": "我们提前到了车站，先看清站台的位置，再去附近的小店买早餐。刚出炉的面包还有一点烫，大家便坐在长椅上慢慢吃。等到广播提醒检票，我们收好包装，把行李提到身边。这次没有一路奔跑，出发前反而多了一点聊天的时间。"
+    },
+    {
+      "id": "zh-travel-03",
+      "language": "zh",
+      "topic": "travel",
+      "text": "走出展馆时，雨刚好停了。朋友看了看地图，说：“不如沿着河边走回去吧。”我们挑了一条安静的小路，经过书店时又停下来看看橱窗。虽然比坐车多花了一些时间，却发现了几家以前没有留意过的小店，也聊完了一个有趣的话题。"
+    },
+    {
+      "id": "zh-travel-04",
+      "language": "zh",
+      "topic": "travel",
+      "text": "周末去海边之前，我们先查看天气，再把外套、饮水和简单的午餐装好。村口的路牌很清楚，每到一个岔路口，大家都会停下来确认方向。走到能看见海面的长椅旁，我们休息了一会儿。后面的路不远，慢慢走也能在中午之前到达。"
+    },
+    {
+      "id": "zh-food-01",
+      "language": "zh",
+      "topic": "food",
+      "text": "去菜市场之前，我先打开冰箱，看清家里还剩下什么。米饭和鸡蛋已经够了，只需要再买几样新鲜蔬菜。摊主帮我把番茄装进纸袋，我又挑了一小把青菜。按照清单买东西，提回家的袋子轻了不少，也不用担心买得太多吃不完。"
+    },
+    {
+      "id": "zh-food-02",
+      "language": "zh",
+      "topic": "food",
+      "text": "准备晚饭时，我先洗好蔬菜，把需要的碗和调料放在手边，再打开炉子。汤煮起来以后，正好可以收拾案板，把果皮和菜叶分开装好。等家人回到家，桌上已经摆好碗筷。厨房没有堆满东西，吃完饭后的清理也比以前轻松一些。"
+    },
+    {
+      "id": "zh-food-03",
+      "language": "zh",
+      "topic": "food",
+      "text": "朋友们约好一起吃午饭，每个人负责带一道菜。我准备凉拌蔬菜，另一个朋友带来刚烤好的面包。大家把盘子放在桌子中间，边吃边聊最近的生活。饭菜很快吃完了，谈话却一直没有停，最后又一起商量下次见面时可以做些什么。"
+    },
+    {
+      "id": "zh-food-04",
+      "language": "zh",
+      "topic": "food",
+      "text": "图书馆旁边新开了一家小店，我还完书后进去坐了一会儿。店主问音乐会不会太响，我说：“这个位置刚刚好。”等早餐的时候，我打开随身带着的本子，把路上想到的事情记下来。窗外有人慢慢走过，店里的气氛也让人放松下来。"
+    },
+    {
+      "id": "zh-work-01",
+      "language": "zh",
+      "topic": "work",
+      "text": "开始今天的工作之前，我先读了一遍昨天留下的笔记。其中有一个问题还没有确认，我便把它写进会议提纲，没有凭印象继续往下做。大家到齐后，先把这个问题说清楚，再分配后面的任务。每个人都知道下一步要做什么，下午少了许多来回询问。"
+    },
+    {
+      "id": "zh-work-02",
+      "language": "zh",
+      "topic": "work",
+      "text": "共享文件夹里的几个文件名称太相似，找一份旧报告经常要打开好几次。我们商量了一套简单的命名方法，把不再使用的副本移到归档目录。整理完成后，我试着寻找上个月的记录，很快就找到了。以后保存文件时，多写清楚一点，大家都能少花一些时间。"
+    },
+    {
+      "id": "zh-work-03",
+      "language": "zh",
+      "topic": "work",
+      "text": "准备发送文档时，我发现其中一个日期和日程表对不上。我没有直接凭记忆修改，而是找到最初的记录，确认以后再把两处内容一起改好。发送前又从头检查了一遍，并在说明里写清这次调整。多花几分钟核对，可以让接手的人少一些疑惑。"
+    },
+    {
+      "id": "zh-work-04",
+      "language": "zh",
+      "topic": "work",
+      "text": "一项任务看起来很大，我们先把它拆成几个小部分，再挑最清楚的一部分开始。第一次尝试就发现少考虑了一个步骤，于是及时补进计划。那天上午完成的内容不多，但后面的安排变得明确了。大家也更容易判断哪些事情可以同时进行，哪些需要先等结果。"
+    },
+    {
+      "id": "zh-learning-01",
+      "language": "zh",
+      "topic": "learning",
+      "text": "学习新内容时，我会在旁边放一本小笔记本。不是把每句话都抄下来，而是记住主要意思，再写一个自己能够解释的例子。当天结束前，我试着合上书重新说一遍。说不清楚的地方就留下一个问题，等下一次学习时再有针对性地查找答案。"
+    },
+    {
+      "id": "zh-learning-02",
+      "language": "zh",
+      "topic": "learning",
+      "text": "一道练习看起来很简单，我却连续两次做错了同一个地方。停下来重新阅读要求后，才发现自己漏看了一个细节。第三次尝试时，我放慢速度，每做完一步就检查一下。虽然用的时间更多，但终于明白了出错的原因，也知道下次应该注意什么。"
+    },
+    {
+      "id": "zh-learning-03",
+      "language": "zh",
+      "topic": "learning",
+      "text": "我们每周在图书馆碰面一次，每个人带来一个学习中遇到的问题。轮到自己时，先说明已经尝试过哪些办法，再请其他人补充。有时一个具体的例子，比很长的解释更容易理解。离开之前，大家各自选一件小事继续练习，下次再交流新的发现。"
+    },
+    {
+      "id": "zh-learning-04",
+      "language": "zh",
+      "topic": "learning",
+      "text": "我想养成每天练习的习惯，便把时间安排在早餐之后。先用十分钟复习一小段内容，再打开其他应用处理事情。有些早晨状态不错，有些早晨只能完成最基本的部分。因为任务不大，即使前一天比较忙，第二天也容易重新开始，不必一直等到有整块空闲。"
+    },
+    {
+      "id": "zh-reading-01",
+      "language": "zh",
+      "topic": "reading",
+      "text": "借来的书在封面内侧印着一张地图，刚开始我没有仔细看。读到后面，人物走过的地点越来越多，我便翻回去对照路线。几个陌生的地名渐渐熟悉起来，不同章节之间的联系也清楚了。这次读得比平时慢，却注意到了许多原本可能忽略的细节。"
+    },
+    {
+      "id": "zh-reading-02",
+      "language": "zh",
+      "topic": "reading",
+      "text": "图书馆入口摆着一排工作人员推荐的书，其中一本讲的是我不太熟悉的话题。我随手翻开第一页，发现文字很清楚，不需要先知道很多背景也能读下去。最后，除了原本打算借的小说，我还把这本书带回了家，准备每天看上一小段。"
+    },
+    {
+      "id": "zh-reading-03",
+      "language": "zh",
+      "topic": "reading",
+      "text": "我和朋友约好在周末读完同一篇故事。星期一见面时，才发现我们注意到的地方完全不同。我几乎没有印象的一段对话，竟然改变了他对结尾的理解。听完他的解释，我又把那几页翻出来读了一遍。一本书没有变，读过之后的感受却多了一层。"
+    },
+    {
+      "id": "zh-reading-04",
+      "language": "zh",
+      "topic": "reading",
+      "text": "以前我常常同时翻看好几本书，每一本都停在不同的地方。这个月，我只选一本放在椅子旁边，其余的先收回书架。每天晚上读几页，故事反而更容易接得上。读完以后，我在本子里记下最喜欢的一段情节，也写了一个还想继续思考的问题。"
+    },
+    {
+      "id": "zh-home-01",
+      "language": "zh",
+      "topic": "home",
+      "text": "书桌上的台灯离书本太远，晚上看东西有些费力。我先调整灯的位置，再收起桌面上用不到的旧纸，只留下本子和一支笔。房间没有大幅改变，桌子却方便了许多。需要记录事情时，不必先搬开一堆杂物，收工以后也能很快整理回原来的样子。"
+    },
+    {
+      "id": "zh-home-02",
+      "language": "zh",
+      "topic": "home",
+      "text": "下雨的下午，我们决定整理门口的柜子。空盒子放在一边，还会用到的东西重新分类，准备送人的物品另外装袋。一条找了很久的围巾，原来压在旧背包后面。整理结束后，柜门终于可以轻松关上，常用的雨伞和购物袋也都有了固定的位置。"
+    },
+    {
+      "id": "zh-home-03",
+      "language": "zh",
+      "topic": "home",
+      "text": "窗台上的小植物一直朝着有光的方向倾斜。我把花盆轻轻转了一个方向，又移开挡在旁边的几本书。接下来的几天，我留意叶子的变化，也看看泥土是不是太干。照顾这一小块地方以后，我开始注意到一天里不同时间的光线，房间也显得更有生气。"
+    },
+    {
+      "id": "zh-home-04",
+      "language": "zh",
+      "topic": "home",
+      "text": "睡觉之前，我把钥匙和背包放到门口固定的位置，再看看第二天出门需要带什么。水杯装好，借来的书也提前放进包里。这些事情只花了一点时间，却省去了早晨翻找的麻烦。起床后可以从容吃完早餐，不必一边穿鞋，一边回想还有什么没有拿。"
+    },
+    {
+      "id": "zh-hobbies-01",
+      "language": "zh",
+      "topic": "hobbies",
+      "text": "周末散步时，我带上相机，却没有特意安排要去哪里。走到熟悉的街角，阳光刚好照在一面旧墙上，树枝的影子形成了有趣的图案。我等路人走过以后拍了一张照片。原来不一定要去很远的地方，放慢脚步，也能在日常路线里发现新的画面。"
+    },
+    {
+      "id": "zh-hobbies-02",
+      "language": "zh",
+      "topic": "hobbies",
+      "text": "球队练习开始时，我们先站得近一些，轮流把球传给旁边的人。等大家找到节奏，再慢慢拉开距离。有几次传球偏了，捡回来重新试就好。练习结束前又踢了一场短比赛，平时不太主动的队友也开始举手要球，场上的配合比刚来时自然了不少。"
+    },
+    {
+      "id": "zh-hobbies-03",
+      "language": "zh",
+      "topic": "hobbies",
+      "text": "很久没有画画，我决定先画桌上的一只杯子。第一张的线条有些歪，但已经能看出杯柄应该往哪里调整。我换了一页纸，再仔细观察一次。这次没有急着擦掉所有错误，而是把两张画都留下来。放在一起比较，反而更容易发现自己进步的地方。"
+    },
+    {
+      "id": "zh-hobbies-04",
+      "language": "zh",
+      "topic": "hobbies",
+      "text": "朋友来家里做客时，我们选了一个规则简单的桌面游戏。一个人负责读说明，其他人把卡片和棋子摆好。先试着玩了一轮，大家就明白了基本方法。后面每一局都换个座位，有时精心准备的计划突然落空，也有时一次随手的选择带来了意外的结果。"
+    },
+    {
+      "id": "zh-nature-01",
+      "language": "zh",
+      "topic": "nature",
+      "text": "每天上班都会经过同一棵树，以前我很少抬头看。一天早晨，几片新叶在阳光下特别明亮，我才发现枝头已经和上个月不同。后来每次路过，我都会留意一下它的变化。走的仍然是熟悉的路线，却多了一件可以期待的小事，也更容易察觉季节正在慢慢改变。"
+    },
+    {
+      "id": "zh-nature-02",
+      "language": "zh",
+      "topic": "nature",
+      "text": "雨后的公园很安静，小路上留下几处浅浅的水洼。我们绕着走过去，看见一只小鸟在长椅旁的草地里寻找食物。再往前走，云层渐渐散开，池塘上出现了一小片阳光。大家在岸边停留了一会儿，没有急着拍照，只是听着周围重新响起的声音。"
+    },
+    {
+      "id": "zh-nature-03",
+      "language": "zh",
+      "topic": "nature",
+      "text": "星期天早上，我们去了附近的社区花园。志愿者先指给大家看可以走的路，提醒我们留意刚种下的小苗。我们帮忙把空花盆搬进工具棚，又扫干净入口的台阶。做完事情后，坐在外面的椅子上休息，才发现平时匆忙经过的地方，其实还有这样安静的一角。"
+    },
+    {
+      "id": "zh-nature-04",
+      "language": "zh",
+      "topic": "nature",
+      "text": "快走到山顶时，风比山脚下大了不少。我们穿好外套，找了一个背风的地方坐下。从高处看，刚才经过的田地变成了一小块一小块的颜色。吃完午餐，大家检查了一下时间，就沿着原路慢慢下山，希望在天色还亮的时候回到出发的地方。"
+    },
+    {
+      "id": "yue-travel-01",
+      "language": "yue",
+      "topic": "travel",
+      "text": "今朝去到巴士站，等車嘅人比平時少。站牌話下一班車仲有一陣先到，我就行入雨棚，將車票同水樽放喺容易攞到嘅位置。架車嚟咗之後，我搵到個靠窗位坐低，睇住街邊啲舖頭逐間開門。唔使一路趕，成個朝早都好似輕鬆咗啲。"
+    },
+    {
+      "id": "yue-travel-02",
+      "language": "yue",
+      "topic": "travel",
+      "text": "我哋早咗到車站，先睇清楚月台喺邊，再去附近買早餐。啱啱出爐嘅麵包仲有啲熱，大家就坐喺長櫈慢慢食。聽到廣播叫人入閘，先收好個袋同手上啲嘢。今次唔使一落車就跑，出發之前反而有時間傾下今日想去邊幾個地方。"
+    },
+    {
+      "id": "yue-travel-03",
+      "language": "yue",
+      "topic": "travel",
+      "text": "行出展館嗰陣，場雨啱啱停。朋友睇咗眼地圖，話：“不如沿住河邊行返去啦。”我哋揀咗條靜啲嘅路，經過書店又停低睇下櫥窗。雖然比搭車花多咗少少時間，但沿途見到幾間以前冇留意過嘅小店，仲傾埋個未講完嘅話題。"
+    },
+    {
+      "id": "yue-travel-04",
+      "language": "yue",
+      "topic": "travel",
+      "text": "週末去海邊之前，我哋先睇天氣，再執好外套、水同簡單午餐。村口啲路牌幾清楚，每到一個路口，大家都會停低對下方向。行到張望到海嘅長櫈，就坐低抖一陣。後面條路唔算遠，唔使急急腳，慢慢行都可以喺中午之前去到。"
+    },
+    {
+      "id": "yue-food-01",
+      "language": "yue",
+      "topic": "food",
+      "text": "去街市之前，我先打開雪櫃，睇下屋企仲有啲乜。米同雞蛋都夠，只係要買幾樣新鮮菜。檔主幫我將番茄裝入紙袋，我再揀咗一小棵菜。照住張清單買，拎返屋企個袋輕咗好多，亦都唔使食飯嗰陣先諗起有啲餸買多咗未煮。"
+    },
+    {
+      "id": "yue-food-02",
+      "language": "yue",
+      "topic": "food",
+      "text": "準備晚飯嗰陣，我先洗好啲菜，將碗同調味料放喺手邊，之後先開火。煲湯嗰段時間，啱啱可以執下砧板，分開裝好果皮同菜葉。等屋企人返到嚟，張枱已經擺好碗筷。廚房冇堆到周圍都係嘢，食完飯要收拾都冇咁頭痛。"
+    },
+    {
+      "id": "yue-food-03",
+      "language": "yue",
+      "topic": "food",
+      "text": "朋友約埋一齊食晏，每個人帶一道餸，唔使一個人煮晒。我整咗碟涼拌菜，另一個朋友就帶嚟啱啱焗好嘅麵包。大家將啲碟放喺枱中間，邊食邊傾近況。食物好快食完，話題就一直冇停，最後仲約定下次見面可以一齊試煮新菜式。"
+    },
+    {
+      "id": "yue-food-04",
+      "language": "yue",
+      "topic": "food",
+      "text": "圖書館隔籬開咗間小店，我還完書就入去坐陣。老闆問音樂會唔會太嘈，我話：“坐呢度啱啱好。”等早餐嗰陣，我攞出隨身個簿，記低頭先行路諗到嘅幾件事。窗外有人慢慢行過，舖頭入面又唔多人，食完早餐先走都唔覺得趕。"
+    },
+    {
+      "id": "yue-work-01",
+      "language": "yue",
+      "topic": "work",
+      "text": "開工之前，我先睇返尋日留低啲筆記。有一個問題仲未問清楚，我就加落開會張清單，冇靠估繼續做。等大家到齊，先講清楚呢件事，再分配後面啲工作。每個人都知道下一步要做乜，下午少咗好多來回問嘢嘅時間，做起上嚟順手咗。"
+    },
+    {
+      "id": "yue-work-02",
+      "language": "yue",
+      "topic": "work",
+      "text": "共用資料夾入面有幾份文件個名太似，搵一份舊報告成日要開幾次。我哋商量好一套簡單嘅改名方法，將唔再用嘅副本搬去另一個位置。執完之後，我試住搵上個月份記錄，好快就搵到。以後存檔嗰陣寫清楚少少，大家都可以慳返啲時間。"
+    },
+    {
+      "id": "yue-work-03",
+      "language": "yue",
+      "topic": "work",
+      "text": "準備寄份文件出去嗰陣，我發現有個日期同日程表對唔上。我冇憑印象改，而係搵返最初嗰份記錄，問清楚先一次過改好兩個位置。寄出之前再由頭睇多次，仲寫低今次改咗乜。花多少少時間核對，接手嗰個人就唔使再估來估去。"
+    },
+    {
+      "id": "yue-work-04",
+      "language": "yue",
+      "topic": "work",
+      "text": "有項工作睇落好多，我哋先拆開幾個細部分，再揀最清楚嗰部分開始。試做第一次，就發現原來漏咗一個步驟，於是即刻加返落計劃。嗰朝完成嘅嘢唔算多，但後面點做清楚咗。大家亦都容易分到邊啲可以同時做，邊啲要等前面有結果先繼續。"
+    },
+    {
+      "id": "yue-learning-01",
+      "language": "yue",
+      "topic": "learning",
+      "text": "學新嘢嗰陣，我會放本細簿喺旁邊。唔係每句都抄低，而係記住個重點，再寫一個自己講得明嘅例子。到一日完結之前，我試下合埋本書，重新講一次。講唔清楚嘅地方就留低個問題，等下次學習時再搵答案，唔使由頭亂咁睇過。"
+    },
+    {
+      "id": "yue-learning-02",
+      "language": "yue",
+      "topic": "learning",
+      "text": "有道練習睇落好簡單，我偏偏連續兩次都錯喺同一個位。停低再睇清楚要求，先發現自己漏咗一個細節。第三次試嘅時候，我放慢啲，每做完一步就對一對。雖然用多咗時間，但終於知點解會錯，下次再遇到同類問題，心入面都有個底。"
+    },
+    {
+      "id": "yue-learning-03",
+      "language": "yue",
+      "topic": "learning",
+      "text": "我哋每個星期喺圖書館見一次，每人帶一個學習時遇到嘅問題。輪到自己，就先講試過邊幾個方法，再請其他人補充。有時一個貼近日常嘅例子，比講一大段道理容易明。走之前，大家各自揀一件小事返去練，下次見面再傾有咩新發現。"
+    },
+    {
+      "id": "yue-learning-04",
+      "language": "yue",
+      "topic": "learning",
+      "text": "我想養成每日練習嘅習慣，就將時間放喺早餐之後。先用十分鐘溫習一小段內容，再開其他程式做嘢。有啲朝早精神好，有啲就只做到最基本嗰部分。因為每次唔使做太多，就算前一日忙到冇空，第二朝都容易再開始，唔使等到放假先算。"
+    },
+    {
+      "id": "yue-reading-01",
+      "language": "yue",
+      "topic": "reading",
+      "text": "借返嚟本書喺封面入面印咗張地圖，開頭我冇點睇。讀到後面，人物去過嘅地方越嚟越多，我先翻返前面對下條路線。幾個陌生地名慢慢熟悉咗，唔同章節之間嘅關係都清楚啲。今次讀得慢過平時，但留意到好多本來可能睇漏嘅細節。"
+    },
+    {
+      "id": "yue-reading-02",
+      "language": "yue",
+      "topic": "reading",
+      "text": "圖書館門口擺咗一排職員推薦嘅書，其中一本講嘅題目我唔係好熟。我隨手揭開第一頁，發現寫得幾清楚，唔使預先識好多背景都睇得明。最後，除咗原本想借嗰本小說，我仲帶埋呢本返屋企，諗住每日睇少少，試下接觸平時少睇嘅內容。"
+    },
+    {
+      "id": "yue-reading-03",
+      "language": "yue",
+      "topic": "reading",
+      "text": "我同朋友約好週末睇完同一篇故事。星期一見面，先發現大家留意嘅地方完全唔同。有段對話我幾乎冇印象，佢就話嗰段令佢對個結尾有另一種理解。聽完之後，我又翻返嗰幾頁再睇。故事本身冇變，但有人一齊傾，真係會見到多啲嘢。"
+    },
+    {
+      "id": "yue-reading-04",
+      "language": "yue",
+      "topic": "reading",
+      "text": "以前我成日同時揭幾本書，每一本都停喺唔同位置。今個月，我只揀一本放喺張櫈旁邊，其餘先放返上書架。每晚睇幾頁，反而容易記得前面講過乜。睇完之後，我喺簿入面寫低最鍾意嗰段情節，仲記咗一個想搵人一齊討論嘅問題。"
+    },
+    {
+      "id": "yue-home-01",
+      "language": "yue",
+      "topic": "home",
+      "text": "書枱盞燈離本書太遠，夜晚睇嘢有啲辛苦。我先移一移盞燈，再收起枱面唔用嗰啲舊紙，只留低個簿同一支筆。間房冇大執過，但張枱好用咗好多。想記低啲嘢時，唔使先搬開成堆雜物，做完嘢又可以好快執返齊，第二日攞嚟用都方便。"
+    },
+    {
+      "id": "yue-home-02",
+      "language": "yue",
+      "topic": "home",
+      "text": "落雨嗰個下午，我哋決定執下門口個櫃。空盒放一邊，仲會用嘅嘢重新分類，打算送人嗰啲就另外裝袋。搵咗好耐條頸巾，原來壓喺個舊背囊後面。執完之後，櫃門終於唔使大力推先閂到，平時用開把遮同購物袋亦都有咗固定位置。"
+    },
+    {
+      "id": "yue-home-03",
+      "language": "yue",
+      "topic": "home",
+      "text": "窗邊盆小植物成日向住有光嗰邊斜。我輕輕轉咗少少個盆，再移開旁邊擋住光嗰幾本書。之後幾日，我留意啲葉有冇變，亦都摸下啲泥會唔會太乾。照顧住呢個小角落，先發現原來朝早同下午照入屋嘅光好唔同，間房都好似有生氣咗。"
+    },
+    {
+      "id": "yue-home-04",
+      "language": "yue",
+      "topic": "home",
+      "text": "瞓覺之前，我將鎖匙同背囊放喺門口固定個位，再諗下聽朝出門要帶啲乜。水樽裝好，借返嚟本書都預先放入袋。呢幾件事花唔到好多時間，但第二朝就唔使周圍搵。起身之後可以慢慢食早餐，唔使一邊着鞋，一邊諗仲有邊樣嘢未攞。"
+    },
+    {
+      "id": "yue-hobbies-01",
+      "language": "yue",
+      "topic": "hobbies",
+      "text": "週末行街嗰陣，我帶埋相機，但冇特登安排去邊。行到平時經過嘅街角，陽光啱啱照住幅舊牆，樹枝啲影砌出幾靚嘅圖案。我等個路人行過先影咗一張。原來唔一定要去好遠，行慢少少，喺熟悉嘅地方都可以搵到以前冇留意嘅畫面。"
+    },
+    {
+      "id": "yue-hobbies-02",
+      "language": "yue",
+      "topic": "hobbies",
+      "text": "球隊開始練波，我哋先企近啲，輪流傳個波畀旁邊嘅隊友。等大家搵到節奏，再慢慢拉開距離。有幾次傳歪咗，執返個波再試就得。練習完之前踢咗場短比賽，平時冇咁主動嘅隊友都開始舉手要波，場上啲配合比啱到嗰陣自然咗好多。"
+    },
+    {
+      "id": "yue-hobbies-03",
+      "language": "yue",
+      "topic": "hobbies",
+      "text": "好耐冇畫畫，我決定先畫枱面隻杯。第一張啲線有少少歪，但已經睇得出個杯耳應該移去邊。我揭過一頁紙，再望清楚一次。今次冇急住擦走晒啲錯位，而係將兩張都留低。擺埋一齊比較，反而容易見到自己有邊度進步，唔會只係望住啲不足。"
+    },
+    {
+      "id": "yue-hobbies-04",
+      "language": "yue",
+      "topic": "hobbies",
+      "text": "朋友嚟屋企玩，我哋揀咗個規則簡單嘅桌上遊戲。一個人讀說明，其他人就擺好啲卡同棋子。先試玩一輪，大家就明白大概要點做。之後每局都換個位，有時諗咗好耐個計劃突然行唔通，有時隨手揀一步反而有驚喜，大家一路玩一路笑。"
+    },
+    {
+      "id": "yue-nature-01",
+      "language": "yue",
+      "topic": "nature",
+      "text": "每日返工都經過同一棵樹，以前我好少抬頭睇。有朝早，幾塊新葉照住陽光特別鮮明，我先發現啲樹枝已經同上個月唔同。之後每次行過，我都會望一望有咩變化。條路仍然係嗰條路，但多咗件小事可以期待，連季節轉緊都容易察覺啲。"
+    },
+    {
+      "id": "yue-nature-02",
+      "language": "yue",
+      "topic": "nature",
+      "text": "落完雨嘅公園好靜，條小路有幾個淺水氹。我哋繞住行過，見到隻雀仔喺長櫈旁邊嘅草地搵嘢食。再行前啲，啲雲慢慢散開，池塘上面出現一小片陽光。大家喺岸邊停咗一陣，冇急住攞電話影相，只係聽下周圍啲聲，成個人都放鬆咗。"
+    },
+    {
+      "id": "yue-nature-03",
+      "language": "yue",
+      "topic": "nature",
+      "text": "星期日朝早，我哋去咗附近個社區花園。義工先指畀大家睇邊啲路行得，提我哋小心啱啱種落去啲苗。我哋幫手搬空花盆入工具房，再掃乾淨門口幾級樓梯。做完之後坐喺外面抖下，先發現平時匆匆行過嘅地方，原來仲有咁安靜嘅一角。"
+    },
+    {
+      "id": "yue-nature-04",
+      "language": "yue",
+      "topic": "nature",
+      "text": "差唔多行到山頂，啲風比山腳大咗好多。我哋着返件外套，搵個冇咁當風嘅位坐低。由高處望落去，頭先經過啲田變成一小格一小格嘅顏色。食完午餐，大家睇下時間，就沿住原路慢慢行落山，想趁天色仲光嗰陣返到出發嘅地方。"
+    }
+  ]
+}

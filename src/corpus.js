@@ -1,26 +1,11 @@
 import { createHash } from 'node:crypto';
 import { fromMarkdown } from 'mdast-util-from-markdown';
+import { LENGTHS, measure, normalizeText, hasUnsupportedCharacters, qualityIssues, nearDuplicate } from './text-policy.js';
+export { LENGTHS, measure, matchesLanguage } from './text-policy.js';
 
-export const LENGTHS = { en: [40, 100], zh: [80, 200], yue: [80, 200] };
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 const sentences = new Intl.Segmenter(undefined, { granularity: 'sentence' });
-const words = new Intl.Segmenter('en', { granularity: 'word' });
-const cantonese = /我哋|你哋|佢哋|屋企|而家|聽日|尋日|噚日|傾偈|食嘢|唔|冇|咗|嘅|喺|嚟|啲|嗰|咁|佢|嘢|攞|睇|畀/gu;
 const unsuitable = /(?:https?:\/\/|www\.)\S+|(?:\/(?:Users|home|tmp|etc|var)\/|[A-Z]:\\)\S+|\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{16,}|AKIA[A-Z0-9]{16})\b|(?:api[_ -]?key|access[_ -]?token|password|secret|密码|密钥)\s*[:=：]\s*\S+|-----BEGIN [A-Z ]*PRIVATE KEY|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|\x1b\[|^\s*(?:\[?(?:INFO|DEBUG|ERROR|WARN)\b|Traceback|at \S+\s*\()/imu;
-
-export function measure(text, language) {
-  return language === 'en'
-    ? [...words.segment(text)].filter(part => part.isWordLike).length
-    : [...graphemes.segment(text)].length;
-}
-
-export function matchesLanguage(text, language) {
-  const han = (text.match(/\p{Script=Han}/gu) || []).length;
-  const letters = (text.match(/\p{L}/gu) || []).length;
-  const yue = [...text.matchAll(cantonese)].length >= 2;
-  if (language === 'en') return han === 0 && /[A-Za-z]/.test(text) && letters / text.length > 0.5;
-  return han / Math.max(1, letters) >= 0.6 && (language === 'yue' ? yue : !yue);
-}
 
 // Keep prose and link labels. Code, HTML, media, tables and headings are
 // boundaries, not holes to silently concatenate across. Never render HTML.
@@ -59,17 +44,24 @@ export function proseRuns(markdown) {
 
 export function splitPassages(text, language) {
   const [min, max] = LENGTHS[language];
+  // Canonical text is also the input to length checks, readings and hashes.
+  text = normalizeText(text, language);
+  if (unsuitable.test(text)) return [];
   const result = [];
   let start = 0;
   let end = 0;
   const flush = () => {
     const value = text.slice(start, end).trim();
-    if (measure(value, language) >= min && matchesLanguage(value, language)) result.push({ text: value, start, end });
+    if (measure(value, language) >= min && !qualityIssues(value, language).length) result.push({ text: value, start, end });
     start = end;
   };
   for (const part of sentences.segment(text)) {
     const nextEnd = part.index + part.segment.length;
-    if (measure(part.segment.trim(), language) > max) { flush(); start = end = nextEnd; continue; }
+    // A meaningful unsupported symbol makes its whole sentence unsuitable.
+    // Treat it as a boundary instead of joining the surrounding prose.
+    if (hasUnsupportedCharacters(part.segment, language) || measure(part.segment.trim(), language) > max) {
+      flush(); start = end = nextEnd; continue;
+    }
     if (measure(text.slice(start, nextEnd).trim(), language) > max) { flush(); start = part.index; }
     end = nextEnd;
   }
@@ -102,7 +94,7 @@ export async function extractPassages(events, options, signal) {
       if (budget < 0) return { candidates, limited: true };
       for (const run of proseRuns(block.text)) for (const part of splitPassages(run.text, options.language)) {
         const fingerprint = createHash('sha256').update(part.text).digest('hex');
-        if (seen.has(fingerprint)) continue;
+        if (seen.has(fingerprint) || candidates.some(item => nearDuplicate(item.text, part.text))) continue;
         seen.add(fingerprint);
         candidates.push({
           id: `${event.seq}:${blockIndex}:${part.start}:${fingerprint.slice(0, 12)}`,
