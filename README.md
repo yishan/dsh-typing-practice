@@ -4,9 +4,9 @@
 
 # dsh-typing-practice
 
-A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: English, Chinese and Cantonese text, recent local conversation passages, native IME input, Pinyin and Jyutping hints, live speed and accuracy, and local best scores.
+A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: English, Chinese and Cantonese text, recent local conversation passages, native IME input, Pinyin and Jyutping hints, live speed and accuracy, local best scores and practice history.
 
-给 DeepSeek Harness Web GUI 加的「打字练习」插件：英文、中文和粤语文本练习，可选默认语料或近期本地对话，使用自己的输入法上屏，可查看拼音或粤拼提示，实时统计速度与准确率，最佳成绩存在本机浏览器。
+给 DeepSeek Harness Web GUI 加的「打字练习」插件：英文、中文和粤语文本练习，可选默认语料或近期本地对话，使用自己的输入法上屏，可查看拼音或粤拼提示，实时统计速度与准确率，最佳成绩和练习历史存在本机浏览器。
 
 > 非官方项目，只是一个 DSH 插件 bundle（`dsh.bundle.patch` + `dsh.client`）。
 
@@ -22,9 +22,10 @@ A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai
 | 模式 | 默认语料为 15 / 30 / 60 秒限时；本地对话为「完成一段」，不计入限时最佳 |
 | 实时反馈 | 英文四行、中文和粤语三行视区；逐字符高亮，组字预览，计时条与剩余时间 |
 | 成绩 | 英文用 WPM，中文和粤语用字/分钟（CPM）；另显示准确率、正确字符和错误数 |
-| 最佳成绩 | 按语言、时长、语料类别、提示状态和规则版本分别保存到 `localStorage['dsh.typing-practice.v2']` |
+| 最佳成绩 | 限时最佳按语言、时长、提示档位和规则版本分别保存；结束后与本轮之前的最佳比较 |
+| 练习历史 | 「记录」中查看最近 100 次练习和限时最佳，支持语言筛选、同篇记录及确认清空；统一保存到 `localStorage['dsh.typing-practice.v3']` |
 | 操作 | 首次有效组字或直接文字输入开始计时；上屏后判分；原生退格、选区替换；始终可见的重开按钮 |
-| 键盘导航 | `Tab` / `Shift+Tab` 依次切换来源、换一段、语言、时长、注音选项、输入区与重开按钮；`Enter` / 空格激活按钮；组字时候选操作交给输入法 |
+| 键盘导航 | `Tab` / `Shift+Tab` 依次切换记录、来源、换一段、语言、时长、注音选项、输入区与重开按钮；`Enter` / 空格激活按钮；记录窗口可用 `Esc` 关闭并恢复焦点；组字时候选操作交给输入法 |
 | 界面 | 中英双语，跟随 DSH locale；只用 `--dsw-alias-*` 主题 token，亮/暗色自适应 |
 
 达到所选时长时即截止，之后的文字确认和退格都不计入本轮成绩，即使浏览器尚未执行下一次计时回调。截止时仍在组字的内容不进入成绩；旧输入框迟到的组合事件不会写入重开后的新一轮。界面优先使用宿主翻译；缺少翻译时，按 `getLocale().active` 选择内置中英文文案。
@@ -71,25 +72,37 @@ dsh plugin --profile <profile> add /absolute/path/to/dsh-typing-practice
 
 ## 数据
 
-最佳成绩写入 `dsh.typing-practice.v2`，其值为以下结构的 JSON 字符串：
+最佳成绩和练习历史统一写入 `dsh.typing-practice.v3`，其值为以下结构的 JSON 字符串：
 
 ```js
 {
-  version: 2,
+  version: 3,
   best: {
     "en:30:builtin:plain:2": { speed: 76, accuracy: 0.94, at: 1793900000000 },
     "yue:30:builtin:plain:2": { speed: 102, accuracy: 0.98, at: 1793900000000 },
     "zh:30:builtin:current:2": { speed: 108, accuracy: 0.97, at: 1793900000000 },
     "yue:30:builtin:all:2": { speed: 96, accuracy: 0.99, at: 1793900000000 }
-  }
+  },
+  legacy: {}, // 旧版 v1 最佳单独保留，不参与新版比较
+  history: [{
+    id: "generated-run-id", language: "en", hints: "off", rules: 2,
+    mode: "timed", source: "builtin", duration: 30, status: "completed",
+    at: 1793900000000, elapsedMs: 30000, speed: 76, accuracy: 0.95,
+    correct: 190, wrongKeys: 10, keystrokes: 200, targetLength: 1200,
+    fingerprint: null
+  }]
 }
 ```
 
-键依次表示语言、秒数、内置语料、提示档位和评分规则版本。提示档位使用 `plain`（关闭）、`current`（当前词）、`all`（全部）；原有 v2 无注音记录继续使用 `plain`，不迁移到有提示的档位。`speed` 的单位由语言决定。旧 `dsh.typing-practice.v1` 原样保留；当前条件没有新版英文记录时，显示带「旧版最佳」标识的旧成绩，不将旧成绩混入新规则比较。删除 v2 只清空新记录，旧记录仍会保留。保存失败会显示提示，不中断练习。
+最佳成绩的键依次表示语言、秒数、内置语料、提示档位和评分规则版本。键中的提示档位使用 `plain`（关闭）、`current`（当前词）、`all`（全部）；历史条目的 `hints` 使用 `off`、`current`、`all`。`speed` 的单位由语言决定。比较时先看速度，速度相同时比较显示到整数百分比的准确率。
+
+每轮结束只追加一次历史，按完成顺序保留最近 100 次。限时提前打完的条目标为 `early`，保存实际用时，但不更新限时最佳。中途重开、更换语料或离开页面不生成历史。本地片段条目使用 `mode: "passage"`、`source: "local"`、`duration: null` 和 SHA-256 文本指纹；仅与最近 100 次中相同原文、语言、提示档位和规则的成绩比较，不混比不同片段。限时最佳独立保留，不受 100 条历史上限影响。
+
+首次读取时兼容 v2 最佳与 v1 旧版最佳，不补造过去的练习历史。下一次保存将有效旧成绩一并写入 v3，原始 v1／v2 数据不改写。旧版最佳单独显示，不参与新版比较。通过「记录 → 清空全部记录 → 确认清空」可一次清空历史及新旧最佳，保留语料来源选项；空的 v3 仍为有效数据，刷新不会重新导入旧成绩。手动删除 v3 会重新触发旧数据导入，因此请使用界面的清空入口。保存失败会提示，本页仍可查看尚未保存的成绩；清空失败则保留原记录。
 
 语料来源单独保存在 `dsh.typing-practice.preferences.v1`：`{"version":1,"source":"local"}` 或 `{"version":1,"source":"builtin"}`。该设置与成绩分开；无效设置回退到默认语料。保存失败会提示，下次打开时可能需要重新选择。
 
-本地对话模式通过当前 DSH Host 读取当前 profile 的聊天历史，不向外部服务上传正文，不调用远程模型或翻译服务。选中的片段只留在本次页面内存中；浏览器存储只保留上述来源选项和最佳成绩。没有收藏、正文缓存或跨设备同步。
+本地对话模式通过当前 DSH Host 读取当前 profile 的聊天历史，不向外部服务上传正文，不调用远程模型或翻译服务。选中的片段只留在本次页面内存中；浏览器存储仅保留来源选项、成绩统计与片段指纹，不保存对话正文、标题、会话 ID 或消息位置。没有收藏、正文缓存或跨设备同步。
 
 ## 结构
 
@@ -142,21 +155,23 @@ npm test
 
 `npm pack` 会在打包前重新构建。运行这些开发命令需要包含 `src/`、`scripts/` 和测试文件的仓库 checkout。
 
-83 项测试覆盖截止、组字、Unicode、编辑、记录、存储、注音和分块，以及对话角色／内容过滤、30 天时间边界、Markdown 清理、完整句子长度、粤语原文识别、去重、读取预算、取消、有限段落完成、桌面请求通道、来源选择记忆和回退。组件测试使用受控时钟和 React hooks 替身，不包含真实 DOM 或操作系统候选窗。
+93 项测试覆盖截止、组字、Unicode、编辑、记录、存储、注音和分块，以及对话角色／内容过滤、30 天时间边界、Markdown 清理、完整句子长度、粤语原文识别、去重、读取预算、取消、有限段落完成、桌面请求通道、来源选择记忆和回退。记录测试覆盖去重、100 条上限、同篇隔离、旧记录迁移、清空失败与重试、正文排除和存储损坏恢复。组件测试使用受控时钟和 React hooks 替身，不包含真实 DOM 或操作系统候选窗。
 
 2026-11-06 已在真实 DSH `0.2.2-rc.1` 中确认三语界面、中文组字与选词上屏，以及两个注音分块实际加载。用户在输入层阶段同步确认候选窗位置正常。模拟宿主页另验了注音随词切换、当前词／全部排版一致、带注音长文本内部滚动、输入锚点、键盘导航和窄屏。详见 [IME 验证记录](docs/validation/2026-11-06-ime.md)与[注音验证记录](docs/validation/2026-11-06-annotations.md)。这些检查不代表所有输入法和设备均已验收。
 
 本地对话已在真实 DSH 选出近期中文片段并进入带拼音练习。三语片段完成、来源切换与记忆、自动回退和 360px 布局的检查见[本地语料验证记录](docs/validation/2026-11-06-local-corpus.md)。
 
+记录窗口、刷新恢复、同篇比较、清空确认和窄屏的验证范围见[记录验证文档](docs/validation/2026-11-06-records.md)。
+
 ## 已知限制
 
-- 当前已交付输入层、三语示例语料、拼音／粤拼提示和近期本地对话选文。手动导入、收藏、历史记录页、音效和自定义外观尚未实现，后续见 [多语言规划](docs/plans/2026-11-06-multilingual-practice-plan.md)。
+- 当前已交付输入层、三语示例语料、拼音／粤拼提示、近期本地对话选文、最佳记录和练习历史。手动导入、收藏、音效和自定义外观尚未实现，后续见 [多语言规划](docs/plans/2026-11-06-multilingual-practice-plan.md)。
 - 每次最多检查 30 个会话，Host 使用 8 秒协作取消预算，Client 最长等待 12 秒；下次从后续会话继续。无结果表示本次预算内未找到，不保证遍历全部历史。宿主读取超大会话仍可能加载整份日志，预算不是严格的磁盘字节上限。
 - 粤语识别使用用词特征初筛，可能漏选或误选；不保证所有片段的语言与自然度。不同宿主版本的历史格式可能需要适配，失败时回退默认语料。来源仅限当前 DSH profile，不读取其他应用历史。
 - 自动注音和分词仍可能有误。内置粤语已为「慢慢行」「返到屋企」增加上下文读音校正；暂未提供用户选音、人工覆盖或读音教学功能。
 - 内置语料规模较小，限时练习会循环使用；还需要扩充和人工审校。
 - Windows、其他输入法，以及组字中跨行、缩放、截止等组合操作仍需真实环境回归。自动测试通过不代表所有输入法均已验证。
-- 切换侧边栏面板会卸载页面，进行中的测试重置；已保存的最佳成绩不受影响。
+- 切换侧边栏面板会卸载页面，进行中的练习重置；已保存的最佳成绩和历史不受影响。练习进行中暂时禁用记录入口，结束或重开后可查看。
 - 成绩只存在本机浏览器，不跨设备同步。
 
 ## License

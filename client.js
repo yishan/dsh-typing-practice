@@ -14,6 +14,8 @@ window.__ModuleLoader__.load({
     const NS = 'typing-practice';
     const LEGACY_STORE_KEY = 'dsh.typing-practice.v1';
     const STORE_KEY = 'dsh.typing-practice.v2';
+    const RECORDS_KEY = 'dsh.typing-practice.v3';
+    const HISTORY_LIMIT = 100;
     const PREFERENCES_KEY = 'dsh.typing-practice.preferences.v1';
     const LANGUAGES = ['en', 'zh', 'yue'];
     const HINT_MODES = ['off', 'current', 'all'];
@@ -77,7 +79,21 @@ window.__ModuleLoader__.load({
       corpusEmpty: '本次未找到合适的近期语料，已使用默认语料。',
       corpusUnavailable: '本地对话暂不可用，已使用默认语料。',
       corpusPassage: '完成一段', corpusElapsed: '用时', corpusCompleted: '已完成 · {seconds} 秒',
-      corpusCount: '{n} 字符', corpusFooter: '片段仅用于本次练习，不保存对话正文，不计入限时最佳。',
+      corpusCount: '{n} 字符', corpusFooter: '仅保存练习统计与片段指纹，不保存对话正文。',
+      records: '记录', recordsTitle: '练习记录', recordsClose: '关闭记录',
+      recordsRunning: '完成或重新开始后可查看记录', recordsRecent: '最近练习', recordsBest: '限时最佳',
+      recordsAll: '全部语言', recordsLanguage: '记录语言', recordsEmpty: '完成一轮练习后，成绩会出现在这里。',
+      recordsBestEmpty: '还没有符合条件的限时最佳。', recordsLimit: '保留最近 100 次练习；同篇比较仅使用这些记录。',
+      recordsLegacy: '旧版最佳', recordsHints: '提示：{mode}', recordsTimed: '{n} 秒限时',
+      recordsCompleted: '已完成', recordsEarly: '提前完成', recordsDetails: '用时 {seconds} 秒 · 正确 {correct} · 错误 {errors}',
+      recordsSame: '同篇记录', recordsSameTitle: '此片段的练习', recordsShowAll: '查看全部',
+      recordsClear: '清空全部记录', recordsClearTitle: '清空练习记录？',
+      recordsClearBody: '将清空练习历史和新旧最佳成绩，无法撤销。语料来源选项会保留。',
+      recordsClearConfirm: '确认清空', recordsCancel: '取消', recordsClearError: '未能清空记录，请重试。现有记录仍保留。',
+      compareFirst: '首次完成此条件的限时练习', compareFirstPassage: '近期还没有同篇、同提示档位的完成记录',
+      compareTimed: '此前最佳 {speed} {unit} · {acc}% · 本次 {delta} {unit}',
+      comparePassage: '近期同篇最佳 {speed} {unit} · {acc}% · 本次 {delta} {unit}',
+      newPassageRecord: '同篇新纪录',
     };
 
     const en = {
@@ -133,7 +149,21 @@ window.__ModuleLoader__.load({
       corpusEmpty: 'No suitable recent text found. Using built-in text.',
       corpusUnavailable: 'Local history is unavailable. Using built-in text.',
       corpusPassage: 'Complete a passage', corpusElapsed: 'Elapsed', corpusCompleted: 'Completed · {seconds}s',
-      corpusCount: '{n} characters', corpusFooter: 'Passage text stays in this practice only and is excluded from timed best scores.',
+      corpusCount: '{n} characters', corpusFooter: 'Only statistics and a passage fingerprint are saved, never conversation text.',
+      records: 'Records', recordsTitle: 'Practice records', recordsClose: 'Close records',
+      recordsRunning: 'Finish or restart this run to view records', recordsRecent: 'Recent practice', recordsBest: 'Timed bests',
+      recordsAll: 'All languages', recordsLanguage: 'Record language', recordsEmpty: 'Complete a practice run to see your results here.',
+      recordsBestEmpty: 'No matching timed bests yet.', recordsLimit: 'Keeps the latest 100 runs. Same-passage comparisons use only these records.',
+      recordsLegacy: 'Legacy bests', recordsHints: 'Hints: {mode}', recordsTimed: '{n}s timed',
+      recordsCompleted: 'Completed', recordsEarly: 'Completed early', recordsDetails: '{seconds}s elapsed · {correct} correct · {errors} errors',
+      recordsSame: 'Same passage', recordsSameTitle: 'Practice on this passage', recordsShowAll: 'Show all',
+      recordsClear: 'Clear all records', recordsClearTitle: 'Clear practice records?',
+      recordsClearBody: 'This permanently clears practice history and current and legacy bests. Your text source preference is kept.',
+      recordsClearConfirm: 'Confirm clear', recordsCancel: 'Cancel', recordsClearError: 'Could not clear records. Your existing records are kept. Try again.',
+      compareFirst: 'First completed timed run with these settings', compareFirstPassage: 'No recent completed run with this passage and hint setting',
+      compareTimed: 'Previous best {speed} {unit} · {acc}% · This run {delta} {unit}',
+      comparePassage: 'Recent same-passage best {speed} {unit} · {acc}% · This run {delta} {unit}',
+      newPassageRecord: 'New passage best',
     };
 
     const dictionaries = { zh, en };
@@ -277,52 +307,110 @@ window.__ModuleLoader__.load({
       });
     }
 
-    // ---------- best score ----------
+    // ---------- local records ----------
 
     function recordKey(language, duration, hints = 'off') {
       return `${language}:${duration}:builtin:${hints === 'off' ? 'plain' : hints}:${RULES_VERSION}`;
     }
 
-    function loadBest() {
-      try {
-        const raw = window.localStorage.getItem(STORE_KEY);
-        if (!raw) return {};
-        const parsed = JSON.parse(raw);
-        const stored = parsed && typeof parsed === 'object' ? parsed.best : null;
-        if (!stored || typeof stored !== 'object') return {};
-        const best = {};
-        if (parsed.version !== 2) return {};
-        for (const language of LANGUAGES) for (const duration of DURATIONS) for (const hints of language === 'en' ? ['off'] : HINT_MODES) {
-          const key = recordKey(language, duration, hints);
-          const entry = stored[key];
-          if (!entry || !Number.isFinite(entry.speed) || entry.speed < 0) continue;
-          best[key] = {
-            speed: Math.round(entry.speed),
-            accuracy: Number.isFinite(entry.accuracy) ? Math.max(0, Math.min(1, entry.accuracy)) : 0,
-            at: Number.isFinite(entry.at) ? entry.at : 0,
-          };
-        }
-        return best;
-      } catch {
-        return {};
+    function sanitizeBest(stored) {
+      if (!stored || typeof stored !== 'object') return {};
+      const best = {};
+      for (const language of LANGUAGES) for (const duration of DURATIONS) for (const hints of language === 'en' ? ['off'] : HINT_MODES) {
+        const key = recordKey(language, duration, hints);
+        const entry = stored[key];
+        if (!entry || !Number.isFinite(entry.speed) || entry.speed < 0) continue;
+        best[key] = {
+          speed: Math.round(entry.speed),
+          accuracy: Number.isFinite(entry.accuracy) ? Math.max(0, Math.min(1, entry.accuracy)) : 0,
+          at: Number.isFinite(entry.at) ? entry.at : 0,
+        };
       }
+      return best;
     }
 
-    function saveBest(best) {
+    function readStored(key) {
+      try { return JSON.parse(window.localStorage.getItem(key) || 'null'); }
+      catch { return null; }
+    }
+
+    function sanitizeLegacy(stored) {
+      const legacy = {};
+      for (const duration of DURATIONS) {
+        const item = stored?.[duration];
+        if (!item || !Number.isFinite(item.wpm) || item.wpm < 0 || !Number.isFinite(item.accuracy)) continue;
+        legacy[duration] = { wpm: Math.round(item.wpm), accuracy: Math.max(0, Math.min(1, item.accuracy)), at: Number.isFinite(item.at) ? item.at : 0 };
+      }
+      return legacy;
+    }
+
+    function sanitizeHistory(stored) {
+      if (!Array.isArray(stored)) return [];
+      const ids = new Set();
+      return stored.slice(0, HISTORY_LIMIT).flatMap(item => {
+        if (!item || typeof item.id !== 'string' || item.id.length > 100 || !item.id || ids.has(item.id)
+          || !LANGUAGES.includes(item.language) || !HINT_MODES.includes(item.hints) || item.language === 'en' && item.hints !== 'off'
+          || item.rules !== RULES_VERSION || !['timed', 'passage'].includes(item.mode)
+          || !['completed', 'early'].includes(item.status) || !Number.isFinite(item.accuracy) || item.accuracy < 0 || item.accuracy > 1
+          || !['at', 'elapsedMs', 'speed', 'correct', 'wrongKeys', 'keystrokes', 'targetLength'].every(key => Number.isSafeInteger(item[key]) && item[key] >= 0)
+          || item.at > 8640000000000000 || item.elapsedMs < 1 || item.targetLength < 1 || item.wrongKeys > item.keystrokes
+          || item.correct > item.targetLength || item.correct > item.keystrokes
+          || item.mode === 'timed' && (item.source !== 'builtin' || !DURATIONS.includes(item.duration)
+            || item.elapsedMs > item.duration * 1000 || item.status === 'completed' && item.elapsedMs !== item.duration * 1000)
+          || item.mode === 'passage' && (item.source !== 'local' || item.status !== 'completed')) return [];
+        ids.add(item.id);
+        // Whitelist fields: never retain text, chat titles, paths or message IDs.
+        return [{ id: item.id, language: item.language, hints: item.hints, rules: item.rules,
+          mode: item.mode, source: item.source, duration: item.mode === 'timed' ? item.duration : null,
+          status: item.status, at: item.at, elapsedMs: item.elapsedMs, speed: item.speed, accuracy: item.accuracy,
+          correct: item.correct, wrongKeys: item.wrongKeys, keystrokes: item.keystrokes, targetLength: item.targetLength,
+          fingerprint: item.mode === 'passage' && /^[a-f0-9]{64}$/.test(item.fingerprint || '') ? item.fingerprint : null }];
+      });
+    }
+
+    function loadRecords() {
+      const current = readStored(RECORDS_KEY);
+      if (current?.version === 3) return { version: 3, best: sanitizeBest(current.best), legacy: sanitizeLegacy(current.legacy), history: sanitizeHistory(current.history) };
+      const previous = readStored(STORE_KEY);
+      return { version: 3, best: previous?.version === 2 ? sanitizeBest(previous.best) : {}, legacy: sanitizeLegacy(readStored(LEGACY_STORE_KEY)?.best), history: [] };
+    }
+
+    function saveRecords(records) {
       try {
-        window.localStorage.setItem(STORE_KEY, JSON.stringify({ version: 2, best }));
+        // One write makes migration, completion and clearing atomic. Old keys
+        // remain untouched; a valid v3 (including an empty one) is authoritative.
+        window.localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
         return true;
-      } catch {
-        return false;
-      }
+      } catch { return false; }
     }
 
-    function loadLegacyBest() {
-      try {
-        return JSON.parse(window.localStorage.getItem(LEGACY_STORE_KEY) || '{}').best || {};
-      } catch {
-        return {};
-      }
+    function isBetter(result, previous) {
+      return !previous || result.speed > previous.speed
+        || result.speed === previous.speed && Math.round(result.accuracy * 100) > Math.round(previous.accuracy * 100);
+    }
+
+    function historyEntry(session) {
+      const result = session.result;
+      return { id: session.recordId, language: result.language, hints: result.hints, rules: RULES_VERSION,
+        mode: session.source ? 'passage' : 'timed', source: session.source ? 'local' : 'builtin',
+        duration: session.source ? null : result.duration, status: session.source || result.eligible ? 'completed' : 'early',
+        at: result.at, elapsedMs: result.elapsedMs, speed: result.speed, accuracy: result.accuracy,
+        correct: result.correct, wrongKeys: result.wrongKeys, keystrokes: result.keystrokes, targetLength: session.target.length,
+        fingerprint: session.source && /^[a-f0-9]{64}$/.test(session.source.fingerprint || '') ? session.source.fingerprint : null };
+    }
+
+    function samePassageBest(history, entry) {
+      if (!entry.fingerprint) return null;
+      return history.filter(item => item.mode === 'passage' && item.fingerprint === entry.fingerprint
+        && item.language === entry.language && item.hints === entry.hints && item.rules === entry.rules)
+        .reduce((best, item) => isBetter(item, best) ? item : best, null);
+    }
+
+    function formatRecordDate(at) {
+      if (!at || !Number.isFinite(at) || Math.abs(at) > 8640000000000000) return '—';
+      return new Intl.DateTimeFormat(activeLanguage === 'en' ? 'en-US' : 'zh-CN', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      }).format(new Date(at));
     }
 
     function loadCorpusPreference() {
@@ -346,6 +434,7 @@ window.__ModuleLoader__.load({
       const text = originalText || practiceText(language);
       return {
         id: ++nextSessionId,
+        recordId: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}-${nextSessionId}`,
         language,
         hints,
         source,
@@ -481,6 +570,7 @@ window.__ModuleLoader__.load({
   gap: 16px;
   flex-wrap: wrap;
 }
+.tp-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tp-title {
   margin: 0;
   font-size: 20px;
@@ -546,7 +636,7 @@ window.__ModuleLoader__.load({
 }
 .tp-hint-control { display: inline-flex; align-items: center; gap: 8px; color: var(--dsw-alias-label-secondary); }
 .tp-select { position: relative; display: inline-flex; }
-.tp-hint-control select {
+.tp-hint-control select, .tp-records-filter select {
   appearance: none;
   -webkit-appearance: none;
   min-height: 44px;
@@ -560,7 +650,7 @@ window.__ModuleLoader__.load({
   cursor: pointer;
 }
 .tp-select-chevron { position: absolute; right: 12px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%); pointer-events: none; }
-.tp-hint-control select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
+.tp-hint-control select:focus-visible, .tp-records-filter select:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .tp-annotation-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--dsw-alias-label-secondary); }
 .tp-corpus-bar { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; }
 .tp-corpus-status { display: grid; flex: 1 1 260px; min-width: 0; min-height: 36px; align-items: center; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
@@ -746,6 +836,7 @@ window.__ModuleLoader__.load({
   gap: 22px;
   flex-wrap: wrap;
 }
+.tp-comparison { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .tp-result-item { min-width: 60px; }
 .tp-result-label {
   font-size: 11px;
@@ -788,6 +879,34 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-brand-primary);
   font-weight: 600;
 }
+.tp-btn:disabled { opacity: .45; cursor: not-allowed; }
+.tp-records-dialog { width: min(760px, calc(100vw - 32px)); height: min(680px, calc(100vh - 32px)); max-height: calc(100vh - 32px); padding: 0; margin: auto; border: 1px solid var(--dsw-alias-border-l1); border-radius: 14px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font: inherit; }
+.tp-records-dialog[open] { display: flex; flex-direction: column; }
+.tp-records-dialog::backdrop { background: rgb(0 0 0 / .35); }
+.tp-records-header, .tp-records-toolbar, .tp-records-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 20px; flex: none; }
+.tp-records-header h2 { margin: 0; font-size: 18px; }
+.tp-records-toolbar { padding-top: 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.tp-records-body { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 20px; }
+.tp-records-footer { border-top: 1px solid var(--dsw-alias-border-l1); }
+.tp-records-footer p { margin: 0; flex: 1 1 240px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.tp-record-list { padding: 0; margin: 0; list-style: none; }
+.tp-record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); font-variant-numeric: tabular-nums; }
+.tp-record-row:last-child { border-bottom: 0; }
+.tp-record-title { margin: 0; font-weight: 500; }
+.tp-record-meta, .tp-record-detail { margin: 5px 0 0; color: var(--dsw-alias-label-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.tp-record-score { text-align: right; }
+.tp-record-speed { font-size: 21px; font-weight: 600; }
+.tp-record-unit { margin-left: 4px; font-size: 11.5px; color: var(--dsw-alias-label-secondary); }
+.tp-record-link { min-height: 44px; padding: 0; margin: 0; background: transparent; border: 0; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.tp-record-link:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
+.tp-record-link:disabled { opacity: .45; cursor: not-allowed; }
+.tp-records-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; }
+.tp-records-empty { padding: 48px 16px; text-align: center; color: var(--dsw-alias-label-secondary); }
+.tp-records-legacy { margin: 22px 0 0; font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-secondary); }
+.tp-clear-confirm { padding: 32px 0; max-width: 480px; }
+.tp-clear-confirm h3 { margin-top: 0; }
+.tp-clear-confirm p { color: var(--dsw-alias-label-secondary); }
+.tp-clear-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
 .tp-foot {
   display: flex;
   justify-content: space-between;
@@ -803,6 +922,8 @@ window.__ModuleLoader__.load({
   .tp-viewport { font-size: 18px; }
   .tp-corpus-controls { order: -1; }
   .tp-corpus-status { min-height: 18px; }
+  .tp-records-header, .tp-records-toolbar, .tp-records-footer { padding-left: 14px; padding-right: 14px; }
+  .tp-records-body { padding: 0 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tp-seg-btn, .tp-timebar-fill { transition: none; }
@@ -943,8 +1064,23 @@ window.__ModuleLoader__.load({
     function TypingPage() {
       useLocaleVersion();
       const [session, setSession] = React.useState(() => createSession(DEFAULT_DURATION));
-      const [best, setBest] = React.useState(loadBest);
+      const [records, setRecords] = React.useState(loadRecords);
+      const best = records.best;
+      const legacyBest = records.legacy;
       const [isRecord, setIsRecord] = React.useState(false);
+      const [comparison, setComparison] = React.useState(null);
+      const [recordsOpen, setRecordsOpen] = React.useState(false);
+      const [recordsView, setRecordsView] = React.useState('recent');
+      const [recordsLanguage, setRecordsLanguage] = React.useState('all');
+      const [recordsPassage, setRecordsPassage] = React.useState(null);
+      const [clearConfirm, setClearConfirm] = React.useState(false);
+      const [clearError, setClearError] = React.useState(false);
+      const recordsDialogRef = React.useRef(null);
+      const recordsButtonRef = React.useRef(null);
+      const recordsCloseRef = React.useRef(null);
+      const recordsShowAllRef = React.useRef(null);
+      const clearCancelRef = React.useRef(null);
+      const clearButtonRef = React.useRef(null);
       const [focused, setFocused] = React.useState(false);
       const [saveError, setSaveError] = React.useState(false);
       const [hintPreference, setHintPreference] = React.useState('current');
@@ -954,7 +1090,6 @@ window.__ModuleLoader__.load({
       const [corpusPreference, setCorpusPreference] = React.useState(loadCorpusPreference);
       const [corpusPreferenceError, setCorpusPreferenceError] = React.useState(false);
       const corpusRequest = React.useRef(null);
-      const [legacyBest] = React.useState(loadLegacyBest);
       const [caretIndex, setCaretIndex] = React.useState(0);
       const [composition, setComposition] = React.useState({ active: false, text: '' });
       const compositionRef = React.useRef({ active: false, anchor: 0 });
@@ -963,7 +1098,7 @@ window.__ModuleLoader__.load({
       const viewportRef = React.useRef(null);
       const sessionRef = React.useRef(session);
       const focusAfterRestart = React.useRef(false);
-      const bestRef = React.useRef(best);
+      const recordsRef = React.useRef(records);
       const handledResultRef = React.useRef(null);
 
       function updateSession(update) {
@@ -977,9 +1112,16 @@ window.__ModuleLoader__.load({
         positionInput(viewportRef.current, inputRef.current, previewRef.current);
       }
 
+      React.useLayoutEffect(() => {
+        const dialog = recordsDialogRef.current;
+        if (!dialog) return;
+        if (recordsOpen && !dialog.open) { dialog.showModal(); recordsCloseRef.current?.focus(); }
+        else if (!recordsOpen && dialog.open) { dialog.close(); recordsButtonRef.current?.focus({ preventScroll: true }); }
+      }, [recordsOpen]);
+
       React.useEffect(() => {
-        bestRef.current = best;
-      }, [best]);
+        if (clearConfirm) clearCancelRef.current?.focus();
+      }, [clearConfirm]);
 
       React.useLayoutEffect(() => {
         if (viewportRef.current) viewportRef.current.scrollTop = 0;
@@ -1047,31 +1189,53 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         const result = session.result;
-        if (!result || !result.eligible) {
+        if (!result) {
           handledResultRef.current = null;
           return;
         }
         if (handledResultRef.current === result) return;
         handledResultRef.current = result;
+        const entry = historyEntry(session);
+        const previous = recordsRef.current;
         const key = recordKey(result.language, result.duration, result.hints);
-        const current = bestRef.current[key];
-        const accuracyPct = Math.round(result.accuracy * 100);
-        const better = !current
-          || result.speed > current.speed
-          || (result.speed === current.speed && accuracyPct > Math.round(current.accuracy * 100));
-        if (!better) {
-          setIsRecord(false);
-          return;
-        }
+        const current = result.eligible ? previous.best[key] : entry.mode === 'passage' ? samePassageBest(previous.history, entry) : null;
+        const better = isBetter(result, current);
+        setComparison(result.eligible || entry.mode === 'passage' ? { previous: current || null, mode: entry.mode } : null);
+        setIsRecord(result.eligible ? better : entry.mode === 'passage' && Boolean(current) && better);
         const next = {
-          ...bestRef.current,
-          [key]: { speed: result.speed, accuracy: result.accuracy, at: result.at },
+          ...previous,
+          history: [entry, ...previous.history.filter(item => item.id !== entry.id)].slice(0, HISTORY_LIMIT),
+          best: result.eligible && better ? { ...previous.best, [key]: { speed: result.speed, accuracy: result.accuracy, at: result.at } } : previous.best,
         };
-        bestRef.current = next;
-        setBest(next);
-        setSaveError(!saveBest(next));
-        setIsRecord(true);
+        recordsRef.current = next;
+        setRecords(next);
+        setSaveError(!saveRecords(next));
       }, [session.result]);
+
+      function openRecords() {
+        const current = sessionRef.current;
+        if (current.startAt != null && !current.result || compositionRef.current.active) return;
+        cancelCorpus();
+        setRecordsPassage(null);
+        setClearConfirm(false); setClearError(false); setRecordsOpen(true);
+      }
+
+      function closeRecords() {
+        setClearConfirm(false); setClearError(false); setRecordsOpen(false);
+      }
+
+      React.useLayoutEffect(() => {
+        if (recordsPassage) recordsShowAllRef.current?.focus();
+      }, [recordsPassage]);
+
+      function clearRecords() {
+        const empty = { version: 3, best: {}, legacy: {}, history: [] };
+        if (!saveRecords(empty)) { setClearError(true); return; }
+        recordsRef.current = empty; setRecords(empty);
+        setSaveError(false); setIsRecord(false); setComparison(null);
+        setRecordsPassage(null); setClearConfirm(false); setClearError(false);
+        recordsCloseRef.current?.focus();
+      }
 
       React.useEffect(() => () => { corpusRequest.current?.abort(); corpusRequest.current = null; }, []);
 
@@ -1148,6 +1312,7 @@ window.__ModuleLoader__.load({
         setComposition({ active: false, text: '' });
         setCaretIndex(0);
         setIsRecord(false);
+        setComparison(null);
         setSaveError(false);
         focusAfterRestart.current = focus;
       }
@@ -1249,6 +1414,95 @@ window.__ModuleLoader__.load({
         event.preventDefault();
       }
 
+      function renderRecordScore(speed, accuracy, language) {
+        return h('div', { className: 'tp-record-score' },
+          h('span', { className: 'tp-record-speed' }, speed),
+          h('span', { className: 'tp-record-unit' }, t(language === 'en' ? 'statsWpm' : 'statsCpm')),
+          h('p', { className: 'tp-record-meta' }, t('statsAccuracy') + ' ' + Math.round(accuracy * 100) + '%'));
+      }
+
+      function renderRecords() {
+        // Keep history rendering off the keystroke path while the dialog is closed.
+        if (!recordsOpen) return h('dialog', { className: 'tp-records-dialog', ref: recordsDialogRef, onClose: closeRecords });
+        const history = records.history.filter(item => (recordsLanguage === 'all' || item.language === recordsLanguage)
+          && (!recordsPassage || item.fingerprint === recordsPassage));
+        const bestRows = Object.entries(best).filter(([key]) => recordsLanguage === 'all' || key.startsWith(recordsLanguage + ':')).sort(([a], [b]) => a.localeCompare(b));
+        const legacyRows = ['all', 'en'].includes(recordsLanguage) ? Object.entries(legacyBest) : [];
+        const hasRecords = records.history.length || Object.keys(best).length || Object.keys(legacyBest).length;
+        return h('dialog', { className: 'tp-records-dialog', ref: recordsDialogRef,
+          'aria-labelledby': 'tp-records-title', 'aria-describedby': 'tp-records-limit',
+          onCancel: event => {
+            event.preventDefault();
+            if (clearConfirm) { setClearConfirm(false); setClearError(false); recordsCloseRef.current?.focus(); }
+            else closeRecords();
+          },
+          onClose: closeRecords,
+          onKeyDown: event => event.stopPropagation(),
+        },
+          h('div', { className: 'tp-records-header' },
+            h('h2', { id: 'tp-records-title' }, t('recordsTitle')),
+            h('button', { className: 'tp-btn', type: 'button', ref: recordsCloseRef, onClick: closeRecords, 'aria-label': t('recordsClose') }, '×')),
+          !clearConfirm ? h('div', { className: 'tp-records-toolbar' },
+            h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('recordsTitle') },
+              ['recent', 'best'].map(view => h('button', { type: 'button', key: view,
+                className: 'tp-seg-btn' + (recordsView === view ? ' active' : ''), 'aria-pressed': recordsView === view,
+                onClick: () => { setRecordsView(view); setRecordsPassage(null); },
+              }, t(view === 'recent' ? 'recordsRecent' : 'recordsBest')))),
+            h('span', { className: 'tp-select tp-records-filter' },
+              h('select', { value: recordsLanguage, 'aria-label': t('recordsLanguage'), onChange: event => {
+                const language = event.currentTarget.value;
+                if (language === 'all' || LANGUAGES.includes(language)) { setRecordsLanguage(language); setRecordsPassage(null); }
+              } }, ['all', ...LANGUAGES].map(language => h('option', { key: language, value: language }, t(language === 'all' ? 'recordsAll' : 'language_' + language)))),
+              h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false }, h('path', { d: 'M3 4.5 6 7.5 9 4.5' }))),
+          ) : null,
+          h('div', { className: 'tp-records-body' },
+            clearConfirm ? h('div', { className: 'tp-clear-confirm' },
+              h('h3', null, t('recordsClearTitle')),
+              h('p', null, t('recordsClearBody')),
+              clearError ? h('p', { className: 'tp-save-error', role: 'alert' }, t('recordsClearError')) : null,
+              h('div', { className: 'tp-clear-actions' },
+                h('button', { className: 'tp-btn', type: 'button', ref: clearCancelRef, onClick: () => {
+                  setClearConfirm(false); setClearError(false); recordsCloseRef.current?.focus();
+                } }, t('recordsCancel')),
+                h('button', { className: 'tp-btn', type: 'button', onClick: clearRecords }, t('recordsClearConfirm'))),
+            ) : recordsView === 'recent' ? h('div', null,
+              recordsPassage ? h('div', { className: 'tp-records-context' }, h('span', null, t('recordsSameTitle')),
+                h('button', { className: 'tp-record-link', type: 'button', ref: recordsShowAllRef, onClick: () => {
+                  setRecordsPassage(null); recordsCloseRef.current?.focus();
+                } }, t('recordsShowAll'))) : null,
+              history.length ? h('ol', { className: 'tp-record-list' }, history.map(item => h('li', { className: 'tp-record-row', key: item.id },
+                h('div', null,
+                  h('p', { className: 'tp-record-title' }, t('language_' + item.language) + ' · ' + t(item.source === 'local' ? 'corpusLocal' : 'corpusBuiltin')),
+                  h('p', { className: 'tp-record-meta' },
+                    (item.mode === 'timed' ? t('recordsTimed', { n: item.duration }) : t('corpusCount', { n: item.targetLength }))
+                    + ' · ' + t('recordsHints', { mode: t('hint_' + item.hints) }) + ' · ' + t(item.status === 'early' ? 'recordsEarly' : 'recordsCompleted')),
+                  h('p', { className: 'tp-record-detail' }, t('recordsDetails', { seconds: (item.elapsedMs / 1000).toFixed(1), correct: item.correct, errors: item.wrongKeys })),
+                  h('p', { className: 'tp-record-meta' }, formatRecordDate(item.at)),
+                  item.fingerprint && !recordsPassage ? h('button', { type: 'button', className: 'tp-record-link', onClick: () => setRecordsPassage(item.fingerprint) }, t('recordsSame')) : null,
+                ), renderRecordScore(item.speed, item.accuracy, item.language),
+              ))) : h('p', { className: 'tp-records-empty' }, t('recordsEmpty')),
+            ) : h('div', null,
+              bestRows.length ? h('ul', { className: 'tp-record-list' }, bestRows.map(([key, item]) => {
+                const [language, duration, , hints] = key.split(':');
+                return h('li', { className: 'tp-record-row', key }, h('div', null,
+                  h('p', { className: 'tp-record-title' }, t('language_' + language) + ' · ' + t('recordsTimed', { n: duration })),
+                  h('p', { className: 'tp-record-meta' }, t('recordsHints', { mode: t('hint_' + (hints === 'plain' ? 'off' : hints)) })),
+                  h('p', { className: 'tp-record-meta' }, formatRecordDate(item.at))), renderRecordScore(item.speed, item.accuracy, language));
+              })) : h('p', { className: 'tp-records-empty' }, t('recordsBestEmpty')),
+              legacyRows.length ? h('div', null, h('h3', { className: 'tp-records-legacy' }, t('recordsLegacy')),
+                h('ul', { className: 'tp-record-list' }, legacyRows.map(([duration, item]) => h('li', { className: 'tp-record-row', key: duration },
+                  h('div', null, h('p', { className: 'tp-record-title' }, t('language_en') + ' · ' + t('recordsTimed', { n: duration })),
+                    h('p', { className: 'tp-record-meta' }, formatRecordDate(item.at))), renderRecordScore(item.wpm, item.accuracy, 'en'))))) : null,
+            ),
+          ),
+          h('div', { className: 'tp-records-footer' },
+            h('p', { id: 'tp-records-limit' }, t('recordsLimit')),
+            !clearConfirm ? h('button', { className: 'tp-record-link', type: 'button', ref: clearButtonRef, disabled: !hasRecords,
+              onClick: () => { setClearError(false); setClearConfirm(true); },
+            }, t('recordsClear')) : null),
+        );
+      }
+
       const stats = sessionStats(session);
       const result = session.result;
       const shownSpeed = result ? result.speed : stats.speed;
@@ -1259,6 +1513,7 @@ window.__ModuleLoader__.load({
       const progress = Math.max(0, Math.min(1, session.source ? characters(session.typed).length / session.target.length : stats.ms / (session.duration * 1000)));
       const bestForDuration = best[recordKey(session.language, session.duration, session.hints)] || null;
       const legacy = !isIme && legacyBest[session.duration];
+      const running = session.startAt != null && !result || composition.active;
 
       return h('div', { className: 'tp-root' + (isIme ? ' tp-ime' : '') + (session.hints !== 'off' ? ' tp-annotated' : '') },
         h('div', { className: 'tp-page' },
@@ -1267,11 +1522,16 @@ window.__ModuleLoader__.load({
               h('h1', { className: 'tp-title' }, t('panelTitle')),
               h('p', { className: 'tp-subtitle' }, t('panelSubtitle')),
             ),
-            h('div', { className: 'tp-best', style: { visibility: session.source ? 'hidden' : 'visible' } },
+            h('div', { className: 'tp-header-actions' },
+              h('div', { className: 'tp-best', style: { visibility: session.source ? 'hidden' : 'visible' } },
               session.source ? t('corpusPassage') : bestForDuration
                 ? t('bestValue', { speed: bestForDuration.speed, unit: speedUnit, acc: Math.round(bestForDuration.accuracy * 100) })
                 : legacy && Number.isFinite(legacy.wpm) && Number.isFinite(legacy.accuracy)
                   ? t('legacyBestValue', { speed: legacy.wpm, acc: Math.round(legacy.accuracy * 100) }) : t('bestNone'),
+              ),
+              h('button', { className: 'tp-btn', type: 'button', ref: recordsButtonRef, onClick: openRecords,
+                disabled: running, title: running ? t('recordsRunning') : undefined, 'aria-haspopup': 'dialog',
+              }, t('records')),
             ),
           ),
           h('div', { className: 'tp-corpus-bar' },
@@ -1405,7 +1665,7 @@ window.__ModuleLoader__.load({
             result ? h('div', { className: 'tp-result', role: 'status', 'aria-live': 'polite' },
               h('div', { className: 'tp-result-title' },
                 h('span', null, session.source ? t('corpusCompleted', { seconds: (result.elapsedMs / 1000).toFixed(1) }) : result.eligible ? t('resultTitle') : t('resultEarly', { seconds: (result.elapsedMs / 1000).toFixed(1) })),
-                isRecord ? h('span', { className: 'tp-record' }, t('newRecordBadge')) : null,
+                isRecord ? h('span', { className: 'tp-record' }, t(session.source ? 'newPassageRecord' : 'newRecordBadge')) : null,
               ),
               h('div', { className: 'tp-result-grid' },
                 h(ResultItem, { label: speedUnit, value: result.speed }),
@@ -1413,6 +1673,11 @@ window.__ModuleLoader__.load({
                 h(ResultItem, { label: t('resultCorrect'), value: result.correct }),
                 h(ResultItem, { label: t('resultErrors'), value: result.wrongKeys }),
               ),
+              comparison ? h('p', { className: 'tp-comparison' }, comparison.previous
+                ? t(comparison.mode === 'passage' ? 'comparePassage' : 'compareTimed', {
+                  speed: comparison.previous.speed, unit: speedUnit, acc: Math.round(comparison.previous.accuracy * 100),
+                  delta: (result.speed > comparison.previous.speed ? '+' : '') + (result.speed - comparison.previous.speed),
+                }) : t(comparison.mode === 'passage' ? 'compareFirstPassage' : 'compareFirst')) : null,
             ) : null,
             h('div', { className: 'tp-actions' },
               h('div', { className: 'tp-instructions' },
@@ -1445,6 +1710,7 @@ window.__ModuleLoader__.load({
             corpusPreferenceError ? h('span', { className: 'tp-corpus-note tp-preference-error', role: 'status' }, t('corpusPreferenceError')) : null,
             saveError ? h('span', { className: 'tp-save-error', role: 'status' }, t('storageError')) : null,
           ),
+          renderRecords(),
         ),
       );
     }

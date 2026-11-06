@@ -26,6 +26,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   let dirty;
   let nextPassage = null;
   const requests = [];
+  const dialogElement = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
   const React = {
     createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
     memo: (component) => component,
@@ -64,7 +65,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       __ModuleLoader__: { load: (module) => { factory = module.factory; } },
       localStorage: {
         getItem: (key) => storage.get(key) ?? null,
-        setItem: (key, value) => { if (failSave) throw new Error('Storage unavailable'); storage.set(key, value); },
+        setItem: (key, value) => { if (typeof failSave === 'function' ? failSave(key) : failSave) throw new Error('Storage unavailable'); storage.set(key, value); },
       },
       setInterval: (callback) => { timers.add(callback); return callback; },
       clearInterval: (callback) => timers.delete(callback),
@@ -104,6 +105,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
         inputElement = { value: '', selectionEnd: 0, blur() {}, focus() {} };
       }
       input.props.ref.current = inputElement;
+      find(node => node.type === 'dialog').props.ref.current = dialogElement;
       for (const effect of pendingEffects) effect();
     } while (dirty);
   }
@@ -174,8 +176,8 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       render();
     },
     async settle() { await new Promise(resolve => setImmediate(resolve)); render(); },
-    async usePassage(text, language = 'en') {
-      nextPassage = { text, language, source: { sessionId: 'fixture', seq: 5, role: 'user', fingerprint: 'a'.repeat(64), title: '示例对话' } };
+    async usePassage(text, language = 'en', fingerprint = 'a'.repeat(64)) {
+      nextPassage = { text, language, source: { sessionId: 'fixture', seq: 5, role: 'user', fingerprint, title: '示例对话' } };
       const local = find(node => node.type === 'button' && node.children[0] === '本地对话语料');
       if (local.props['aria-pressed']) await find(node => node.type === 'button' && node.props.className === 'tp-btn tp-corpus-next').props.onClick();
       else { local.props.onClick(); render(); await new Promise(resolve => setImmediate(resolve)); }
@@ -206,10 +208,23 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     title: () => find((node) => node.type === 'h1').children[0],
     finished: () => Boolean(find((node) => node.props.className === 'tp-result')),
     saved: (language = 'en', hints = 'off') => {
-      const best = JSON.parse(storage.get('dsh.typing-practice.v2') || '{"best":{}}').best;
+      const best = JSON.parse(storage.get('dsh.typing-practice.v3') || storage.get('dsh.typing-practice.v2') || '{"best":{}}').best;
       return Object.fromEntries(Object.entries(best).filter(([key]) => key.startsWith(language + ':') && key.split(':')[3] === (hints === 'off' ? 'plain' : hints)).map(([key, value]) => [key.split(':')[1], value]));
     },
     rawStorage: key => storage.get(key),
+    records: () => JSON.parse(storage.get('dsh.typing-practice.v3') || 'null'),
+    comparison: () => find(node => node.props.className === 'tp-comparison')?.children[0],
+    newRecord: () => find(node => node.props.className === 'tp-record')?.children[0],
+    recordsDisabled: () => find(node => node.type === 'button' && node.props['aria-haspopup'] === 'dialog').props.disabled,
+    openRecords() { find(node => node.type === 'button' && node.props['aria-haspopup'] === 'dialog').props.onClick(); render(); },
+    recordsOpen: () => dialogElement.open,
+    recordAction(label) { find(node => node.type === 'button' && node.children[0] === label).props.onClick(); render(); },
+    recordsFilter(language) { find(node => node.type === 'select' && node.props['aria-label'] === '记录语言').props.onChange({ currentTarget: { value: language } }); render(); },
+    recordsText() {
+      function content(node) { if (typeof node === 'string' || typeof node === 'number') return String(node); return (node?.children || []).flat(Infinity).map(content).join(' '); }
+      return content(find(node => node.type === 'dialog'));
+    },
+    recordsEscape() { find(node => node.type === 'dialog').props.onCancel({ preventDefault() {} }); render(); },
     stat: label => find((node) => node.props.label === label && node.props.value != null)?.props.value,
     bestText: () => find((node) => node.props.className === 'tp-best').children[0],
     saveError: () => Boolean(find((node) => node.props.className === 'tp-save-error')),
@@ -572,8 +587,8 @@ test('hint modes have distinct persistent bests and retain earlier plain scores'
     app.tick(31000 + i * 40000);
     assert.equal(app.saved('zh', hints)[30].speed, (i + 1) * 2);
   }
-  const stored = app.rawStorage('dsh.typing-practice.v2');
-  const restored = mountClient(undefined, { 'dsh.typing-practice.v2': stored });
+  const stored = app.rawStorage('dsh.typing-practice.v3');
+  const restored = mountClient(undefined, { 'dsh.typing-practice.v3': stored });
   restored.language('中文');
   for (const [i, hints] of ['off', 'current', 'all'].entries()) {
     restored.hints(hints);
@@ -789,4 +804,161 @@ test('invalid saved preferences default safely and unavailable storage does not 
   assert.equal(app.board().text, 'Local practice still works.');
   assert.equal(app.sourceSelected('本地对话语料'), true);
   assert.equal(app.preferenceError(), true);
+});
+
+test('completed runs are recorded once and compare against the best before the current run', () => {
+  const app = mountClient();
+  app.input(app.board().text.slice(0, 10), 1000); app.tick(31000);
+  assert.equal(app.records().history.length, 1);
+  assert.equal(app.records().history[0].speed, 4);
+  assert.match(app.comparison(), /首次完成/);
+  app.tick(90000); app.refresh();
+  assert.equal(app.records().history.length, 1);
+  app.restart();
+  app.input(app.board().text.slice(0, 5), 100000); app.tick(130000);
+  assert.equal(app.records().history.length, 2);
+  assert.equal(app.records().history[0].speed, 2);
+  assert.equal(app.saved()[30].speed, 4);
+  assert.match(app.comparison(), /此前最佳 4 WPM.*本次 -2 WPM/);
+  assert.equal(app.newRecord(), undefined);
+  app.restart(); app.input(app.board().text.slice(0, 15), 140000); app.tick(170000);
+  assert.equal(app.saved()[30].speed, 6);
+  assert.match(app.comparison(), /此前最佳 4 WPM.*本次 \+2 WPM/);
+  assert.equal(app.newRecord(), '新纪录');
+});
+
+test('v3 imports v2 and legacy bests without inventing history or rewriting old storage', () => {
+  const v1 = JSON.stringify({ best: { 15: { wpm: 80, accuracy: .98, at: 123 } } });
+  const v2 = JSON.stringify({ version: 2, best: { 'en:30:builtin:plain:2': { speed: 4, accuracy: .8, at: 123 } } });
+  const app = mountClient(undefined, { 'dsh.typing-practice.v1': v1, 'dsh.typing-practice.v2': v2 });
+  assert.equal(app.records(), null);
+  app.openRecords(); assert.match(app.recordsText(), /完成一轮练习后/);
+  app.recordAction('限时最佳'); assert.match(app.recordsText(), /旧版最佳/); assert.match(app.recordsText(), /80/);
+  app.recordsEscape();
+  app.input(app.board().text.slice(0, 10), 1000); app.tick(31000);
+  assert.equal(app.saved()[30].accuracy, 1);
+  assert.match(app.comparison(), /此前最佳 4 WPM · 80%/);
+  assert.equal(app.newRecord(), '新纪录');
+  assert.equal(app.records().legacy[15].wpm, 80);
+  assert.equal(app.records().history.length, 1);
+  assert.equal(app.rawStorage('dsh.typing-practice.v1'), v1);
+  assert.equal(app.rawStorage('dsh.typing-practice.v2'), v2);
+});
+
+test('early completion is recorded separately; restart and language changes do not record unfinished runs', () => {
+  const app = mountClient();
+  app.input(app.board().text[0], 1000); app.restart();
+  app.input(app.board().text[0], 2000); app.language('中文');
+  assert.equal(app.records(), null);
+  app.input(app.board().text, 3000);
+  assert.equal(app.records().history[0].status, 'early');
+  assert.equal(app.records().history[0].mode, 'timed');
+  assert.deepEqual(app.saved('zh'), {});
+  assert.equal(app.comparison(), undefined);
+});
+
+test('passage comparison isolates original text, language and hint setting and saves only statistics', async () => {
+  const app = mountClient(); const text = '你好，周末。';
+  app.language('中文');
+  await app.usePassage(text, 'zh');
+  app.input(text[0], 1000); app.input(text, 2000);
+  const first = app.records().history[0];
+  assert.equal(first.duration, null); assert.equal(first.status, 'completed');
+  assert.match(app.comparison(), /还没有同篇/);
+  app.restart(); app.input(text[0], 3000); app.input(text, 3500);
+  assert.match(app.comparison(), new RegExp(`近期同篇最佳 ${first.speed} 字/分钟`));
+  assert.equal(app.newRecord(), '同篇新纪录');
+  app.hints('current'); await app.settle(); app.input(text[0], 4000); app.input(text, 5000);
+  assert.match(app.comparison(), /还没有同篇/);
+  await app.usePassage('另一段中文。', 'zh', 'b'.repeat(64)); await app.settle();
+  app.input('另', 6000); app.input('另一段中文。', 7000);
+  assert.match(app.comparison(), /还没有同篇/);
+  assert.deepEqual(app.saved('zh'), {});
+  const saved = app.rawStorage('dsh.typing-practice.v3');
+  for (const forbidden of [text, '另一段中文', '示例对话', 'sessionId', 'fixture', 'title', 'typed', 'annotations']) assert.equal(saved.includes(forbidden), false);
+  app.openRecords(); app.recordAction('同篇记录');
+  assert.match(app.recordsText(), /此片段的练习/);
+  assert.doesNotMatch(app.recordsText(), /6 字符.*6 字符/);
+  app.recordAction('查看全部'); assert.match(app.recordsText(), /同篇记录/);
+});
+
+test('history survives remount, retains 100 newest runs and preserves all-time timed bests', () => {
+  const app = mountClient(); app.input(app.board().text.slice(0, 10), 1000); app.tick(31000);
+  const seed = app.records(); const sample = seed.history[0];
+  seed.history = Array.from({ length: 100 }, (_, i) => ({ ...sample, id: 'old-' + i, at: sample.at - i }));
+  const restored = mountClient(undefined, { 'dsh.typing-practice.v3': JSON.stringify(seed) });
+  restored.input(restored.board().text[0], 1000); restored.tick(31000);
+  assert.equal(restored.records().history.length, 100);
+  assert.equal(restored.records().history[1].id, 'old-0');
+  assert.equal(restored.records().history.at(-1).id, 'old-98');
+  assert.equal(restored.saved()[30].speed, 4);
+  restored.openRecords(); restored.recordsFilter('yue');
+  assert.match(restored.recordsText(), /完成一轮练习后/);
+  restored.recordsFilter('en'); assert.match(restored.recordsText(), /默认语料/);
+});
+
+test('clearing needs confirmation, is atomic, keeps source preference and does not resurrect legacy scores', () => {
+  const preference = '{"version":1,"source":"builtin"}';
+  const initial = { 'dsh.typing-practice.preferences.v1': preference, 'dsh.typing-practice.v1': '{"best":{"30":{"wpm":85,"accuracy":1}}}' };
+  const app = mountClient(undefined, initial);
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  app.openRecords(); app.recordAction('清空全部记录');
+  assert.equal(app.records().history.length, 1);
+  app.recordsEscape(); assert.equal(app.recordsOpen(), true); assert.equal(app.records().history.length, 1);
+  app.recordAction('清空全部记录'); app.recordAction('确认清空');
+  app.refresh();
+  assert.deepEqual(app.records(), { version: 3, best: {}, legacy: {}, history: [] });
+  assert.equal(app.rawStorage('dsh.typing-practice.preferences.v1'), preference);
+  const restored = mountClient(undefined, { ...initial, 'dsh.typing-practice.v3': app.rawStorage('dsh.typing-practice.v3') });
+  assert.equal(restored.bestText(), '暂无最佳记录');
+  restored.openRecords(); restored.recordAction('限时最佳'); assert.doesNotMatch(restored.recordsText(), /旧版最佳/);
+});
+
+test('failed clear retains records and can be retried without a partial deletion', () => {
+  let fail = false;
+  const app = mountClient(undefined, {}, () => fail);
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  const original = app.rawStorage('dsh.typing-practice.v3');
+  app.openRecords(); app.recordAction('清空全部记录'); fail = true; app.recordAction('确认清空');
+  assert.match(app.recordsText(), /未能清空/); assert.equal(app.rawStorage('dsh.typing-practice.v3'), original);
+  fail = false; app.recordAction('确认清空'); assert.equal(app.records().history.length, 0);
+});
+
+test('failed completion save keeps the result and pending history in memory for a later successful save', () => {
+  let fail = true;
+  const app = mountClient(undefined, {}, () => fail);
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  assert.equal(app.saveError(), true); assert.equal(app.records(), null);
+  app.openRecords(); assert.match(app.recordsText(), /默认语料/); app.recordsEscape();
+  fail = false; app.restart(); app.input(app.board().text[0], 40000); app.tick(70000);
+  assert.equal(app.saveError(), false); assert.equal(app.records().history.length, 2);
+});
+
+test('record dialog refuses an active run and cancels a pending corpus request when opened', async () => {
+  let resolve;
+  const app = mountClient(undefined, {}, false, undefined, () => new Promise(done => { resolve = done; }));
+  app.input(app.board().text[0], 1000); assert.equal(app.recordsDisabled(), true);
+  app.openRecords(); assert.equal(app.recordsOpen(), false);
+  app.restart(); assert.equal(app.recordsDisabled(), false);
+  app.source('本地对话语料'); app.openRecords();
+  assert.equal(app.recordsOpen(), true); assert.equal(app.requests[0].options.signal.aborted, true);
+  resolve({ ok: true, json: async () => ({ candidate: { language: 'en', text: 'Late text.', source: { sessionId: 'old' } } }) });
+  await app.settle(); assert.notEqual(app.board().text, 'Late text.');
+  app.recordsEscape(); assert.equal(app.recordsOpen(), false);
+});
+
+test('malformed stored records are filtered and unknown text fields are removed on the next save', () => {
+  const base = mountClient(); base.input(base.board().text[0], 1000); base.tick(31000);
+  const seed = base.records(); const entry = seed.history[0];
+  seed.history = [{ ...entry, text: 'PRIVATE BODY', title: 'PRIVATE TITLE' }, { ...entry },
+    { ...entry, id: 'bad-language', language: 'constructor' }, { ...entry, id: 'bad-time', at: 1e20 },
+    { ...entry, id: 'bad-duration', duration: 90 }, { ...entry, id: 'bad-errors', wrongKeys: 999 }, null];
+  const app = mountClient(undefined, { 'dsh.typing-practice.v3': JSON.stringify(seed) });
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  assert.equal(app.records().history.length, 2);
+  assert.equal(app.rawStorage('dsh.typing-practice.v3').includes('PRIVATE'), false);
+  for (const invalid of ['{', 'null', '{"version":3,"history":{},"best":null,"legacy":null}']) {
+    const empty = mountClient(undefined, { 'dsh.typing-practice.v3': invalid });
+    empty.openRecords(); assert.match(empty.recordsText(), /完成一轮练习后/);
+  }
 });
