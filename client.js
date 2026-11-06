@@ -19,6 +19,8 @@ window.__ModuleLoader__.load({
     const PREFERENCES_KEY = 'dsh.typing-practice.preferences.v1';
     const SOUND_KEY = 'dsh.typing-practice.sound.v1';
     const SOUND_PACKS = ['off', 'mxblue', 'mxbrown', 'cream', 'holypanda'];
+    const CURSOR_KEY = 'dsh.typing-practice.cursor.v1';
+    const CURSOR_SHAPES = ['line', 'underline', 'outline'];
     const LANGUAGES = ['en', 'zh', 'yue'];
     const HINT_MODES = ['off', 'current', 'all'];
     const RULES_VERSION = 2;
@@ -102,6 +104,10 @@ window.__ModuleLoader__.load({
       soundRunning: '完成或重新开始后可设置音效', soundLoading: '正在准备音效…',
       soundError: '音效暂不可用，可点击试听重试。练习不受影响。', soundSaveError: '音效选项未能保存，下次打开可能需要重新选择。',
       soundCredit: '录音：kbsim / Thomas Lai · MIT',
+      cursor: '光标', cursorTitle: '光标样式', cursorClose: '关闭光标设置', cursorShape: '形状',
+      cursor_line: '竖线', cursor_underline: '下划线', cursor_outline: '方框',
+      cursorGlow: '光晕', cursorBlink: '闪烁', cursorPreview: '光标预览',
+      cursorRunning: '完成或重新开始后可设置光标', cursorSaveError: '光标选项未能保存，下次打开可能需要重新选择。',
     };
 
     const en = {
@@ -178,6 +184,10 @@ window.__ModuleLoader__.load({
       soundRunning: 'Finish or restart this run to change sounds', soundLoading: 'Preparing sounds…',
       soundError: 'Sound is unavailable. Preview to retry. Practice still works.', soundSaveError: 'Sound settings could not be saved. You may need to choose again next time.',
       soundCredit: 'Recordings: kbsim / Thomas Lai · MIT',
+      cursor: 'Cursor', cursorTitle: 'Cursor style', cursorClose: 'Close cursor settings', cursorShape: 'Shape',
+      cursor_line: 'Line', cursor_underline: 'Underline', cursor_outline: 'Outline',
+      cursorGlow: 'Glow', cursorBlink: 'Blink', cursorPreview: 'Cursor preview',
+      cursorRunning: 'Finish or restart this run to change the cursor', cursorSaveError: 'Cursor settings could not be saved. You may need to choose again next time.',
     };
 
     const dictionaries = { zh, en };
@@ -451,6 +461,14 @@ window.__ModuleLoader__.load({
     function loadAudioModule() {
       if (!audioModule) audioModule = require.async('./client.audio.js').catch(error => { audioModule = null; throw error; });
       return audioModule;
+    }
+
+    function loadCursorPreference() {
+      const saved = readStored(CURSOR_KEY);
+      return { version: 1,
+        shape: saved?.version === 1 && CURSOR_SHAPES.includes(saved.shape) ? saved.shape : 'line',
+        glow: saved?.version === 1 && typeof saved.glow === 'boolean' ? saved.glow : true,
+        blink: saved?.version === 1 && typeof saved.blink === 'boolean' ? saved.blink : false };
     }
 
     // ---------- session engine ----------
@@ -753,6 +771,9 @@ window.__ModuleLoader__.load({
   outline-offset: 3px;
 }
 .tp-viewport {
+  /* Extend the clipping boundary without changing text width or line breaks. */
+  margin-inline: -16px;
+  padding-inline: 16px;
   height: calc(4 * 1.85em + 4px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -778,7 +799,36 @@ window.__ModuleLoader__.load({
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
-.tp-char.caret { box-shadow: inset 2px 0 0 0 var(--dsw-alias-brand-primary); }
+.tp-root { --tp-cursor-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color, #4176e6); }
+.tp-char.caret { position: relative; }
+.tp-char.caret::before {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+  left: -1px;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  min-height: 1em;
+  border-radius: 2px;
+  background: var(--tp-cursor-color);
+}
+.tp-root[data-cursor-shape="underline"] .tp-char.caret::before {
+  left: 0; top: auto; bottom: -2px; width: 100%; min-width: .6em; height: 3px; min-height: 0;
+}
+.tp-root[data-cursor-shape="outline"] .tp-char.caret::before {
+  left: -1px; width: calc(100% + 2px); min-width: .6em; background: transparent; border: 2px solid var(--tp-cursor-color); border-radius: 3px;
+}
+.tp-root[data-cursor-glow="true"] .tp-char.caret::before {
+  box-shadow: 0 0 5px color-mix(in srgb, var(--tp-cursor-color) 50%, transparent),
+    -6px 0 12px 2px color-mix(in srgb, var(--tp-cursor-color) 22%, transparent),
+    6px 0 12px 2px color-mix(in srgb, var(--tp-cursor-color) 22%, transparent);
+}
+@keyframes tp-cursor-blink { 0%, 45%, 100% { opacity: 1; } 65%, 85% { opacity: .2; } }
+.tp-root[data-cursor-blink="true"] .tp-char.caret::before { animation: tp-cursor-blink 1.2s ease-in-out infinite; }
+.tp-board-wrap:not(:focus-within) .tp-char.caret::before { opacity: .4; box-shadow: none; animation: none; }
+.tp-board-wrap.tp-composing .tp-char.caret::before { animation: none; }
 .tp-input {
   position: fixed;
   top: 0;
@@ -798,6 +848,8 @@ window.__ModuleLoader__.load({
   font-size: 16px;
   line-height: 24px;
 }
+/* The visible board provides the focus ring; the IME anchor must stay invisible. */
+.tp-input:focus { outline: none; }
 .tp-ime .tp-viewport { height: calc(3 * 2.7em + 4px); line-height: 2.7; }
 .tp-ime .tp-board { font-family: inherit; letter-spacing: 0.1em; }
 .tp-annotated .tp-board { padding-top: 12px; letter-spacing: 0; }
@@ -933,7 +985,7 @@ window.__ModuleLoader__.load({
 .tp-clear-confirm h3 { margin-top: 0; }
 .tp-clear-confirm p { color: var(--dsw-alias-label-secondary); }
 .tp-clear-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
-.tp-sound-dialog { width: min(440px, calc(100vw - 32px)); height: fit-content; }
+.tp-sound-dialog, .tp-cursor-dialog { width: min(440px, calc(100vw - 32px)); height: fit-content; }
 .tp-sound-body { padding: 4px 20px 20px; overflow-y: auto; }
 .tp-sound-field { display: grid; gap: 8px; margin-bottom: 18px; font-size: 13px; }
 .tp-sound-field .tp-select, .tp-sound-field select { width: 100%; min-width: 0; }
@@ -943,6 +995,14 @@ window.__ModuleLoader__.load({
 .tp-sound-status { display: grid; margin: 10px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .tp-sound-status > span { grid-area: 1 / 1; }
 .tp-sound-credit { font-size: 11px; color: var(--dsw-alias-label-secondary); text-underline-offset: 3px; }
+.tp-cursor-preview { display: flex; justify-content: center; align-items: center; min-height: 92px; margin: 0 0 18px; border-radius: 8px; background: var(--dsw-alias-bg-layer-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 26px; line-height: 1.25; }
+.tp-cursor-preview-text { white-space: pre; }
+.tp-cursor-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; font-size: 13px; cursor: pointer; }
+.tp-cursor-toggle input { appearance: none; flex: none; position: relative; width: 36px; height: 22px; margin: 0; border: 1px solid var(--dsw-alias-border-l1); border-radius: 999px; background: var(--dsw-alias-bg-layer-3); cursor: pointer; }
+.tp-cursor-toggle input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-label-primary); transition: transform 150ms ease-out; }
+.tp-cursor-toggle input:checked { background: var(--dsw-alias-label-primary); }
+.tp-cursor-toggle input:checked::before { background: var(--dsw-alias-bg-base); transform: translateX(14px); }
+.tp-cursor-toggle input:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .tp-foot {
   display: flex;
   justify-content: space-between;
@@ -963,6 +1023,8 @@ window.__ModuleLoader__.load({
 }
 @media (prefers-reduced-motion: reduce) {
   .tp-seg-btn, .tp-timebar-fill { transition: none; }
+  .tp-root[data-cursor-blink] .tp-char.caret::before { animation: none; }
+  .tp-cursor-toggle input::before { transition: none; }
 }
 `;
 
@@ -1126,6 +1188,12 @@ window.__ModuleLoader__.load({
       const soundButtonRef = React.useRef(null);
       const soundCloseRef = React.useRef(null);
       const audioRef = React.useRef({ context: null, player: null, pack: null, preparing: null, epoch: 0, disposed: false, status: 'idle' });
+      const [cursorPreference, setCursorPreference] = React.useState(loadCursorPreference);
+      const [cursorOpen, setCursorOpen] = React.useState(false);
+      const [cursorSaveError, setCursorSaveError] = React.useState(false);
+      const cursorDialogRef = React.useRef(null);
+      const cursorButtonRef = React.useRef(null);
+      const cursorCloseRef = React.useRef(null);
       const [focused, setFocused] = React.useState(false);
       const [saveError, setSaveError] = React.useState(false);
       const [hintPreference, setHintPreference] = React.useState('current');
@@ -1174,6 +1242,13 @@ window.__ModuleLoader__.load({
         if (soundOpen && !dialog.open) { dialog.showModal(); soundCloseRef.current?.focus(); }
         else if (!soundOpen && dialog.open) { dialog.close(); soundButtonRef.current?.focus({ preventScroll: true }); }
       }, [soundOpen]);
+
+      React.useLayoutEffect(() => {
+        const dialog = cursorDialogRef.current;
+        if (!dialog) return;
+        if (cursorOpen && !dialog.open) { dialog.showModal(); cursorCloseRef.current?.focus(); }
+        else if (!cursorOpen && dialog.open) { dialog.close(); cursorButtonRef.current?.focus({ preventScroll: true }); }
+      }, [cursorOpen]);
 
       function stopSound() {
         audioRef.current.epoch++;
@@ -1576,6 +1651,37 @@ window.__ModuleLoader__.load({
 
       function closeSound() { stopSound(); setSoundOpen(false); }
 
+      function changeCursor(patch) {
+        const next = { ...cursorPreference, ...patch };
+        if (!CURSOR_SHAPES.includes(next.shape) || typeof next.glow !== 'boolean' || typeof next.blink !== 'boolean') return;
+        setCursorPreference(next);
+        try { window.localStorage.setItem(CURSOR_KEY, JSON.stringify(next)); setCursorSaveError(false); }
+        catch { setCursorSaveError(true); }
+      }
+
+      function renderCursor() {
+        const close = () => setCursorOpen(false);
+        const props = { className: 'tp-records-dialog tp-cursor-dialog', ref: cursorDialogRef, onClose: close };
+        if (!cursorOpen) return h('dialog', props);
+        return h('dialog', { ...props, 'aria-labelledby': 'tp-cursor-title',
+          onCancel: event => { event.preventDefault(); close(); }, onKeyDown: event => event.stopPropagation() },
+          h('div', { className: 'tp-records-header' }, h('h2', { id: 'tp-cursor-title' }, t('cursorTitle')),
+            h('button', { className: 'tp-btn', type: 'button', ref: cursorCloseRef, onClick: close, 'aria-label': t('cursorClose') }, '×')),
+          h('div', { className: 'tp-sound-body' },
+            h('div', { className: 'tp-cursor-preview', role: 'img', 'aria-label': t('cursorPreview') },
+              h('span', { className: 'tp-cursor-preview-text', 'aria-hidden': true }, 'Aa ', h('span', { className: 'tp-char caret' }, '中'), '文')),
+            h('label', { className: 'tp-sound-field' }, h('span', null, t('cursorShape')),
+              h('span', { className: 'tp-select' }, h('select', { value: cursorPreference.shape, 'aria-label': t('cursorShape'), onChange: event => changeCursor({ shape: event.currentTarget.value }) },
+                CURSOR_SHAPES.map(shape => h('option', { key: shape, value: shape }, t('cursor_' + shape)))),
+                h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false }, h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
+            ['glow', 'blink'].map(option => h('label', { className: 'tp-cursor-toggle', key: option },
+              h('span', null, t(option === 'glow' ? 'cursorGlow' : 'cursorBlink')),
+              h('input', { type: 'checkbox', role: 'switch', checked: cursorPreference[option], onChange: event => changeCursor({ [option]: event.currentTarget.checked }) }))),
+            h('div', { className: 'tp-sound-status' },
+              h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('cursorSaveError')),
+              h('span', { role: 'status' }, cursorSaveError ? t('cursorSaveError') : ''))));
+      }
+
       function renderSound() {
         const props = { className: 'tp-records-dialog tp-sound-dialog', ref: soundDialogRef, onClose: closeSound };
         if (!soundOpen) return h('dialog', props);
@@ -1695,7 +1801,8 @@ window.__ModuleLoader__.load({
       const legacy = !isIme && legacyBest[session.duration];
       const running = session.startAt != null && !result || composition.active;
 
-      return h('div', { className: 'tp-root' + (isIme ? ' tp-ime' : '') + (session.hints !== 'off' ? ' tp-annotated' : '') },
+      return h('div', { className: 'tp-root' + (isIme ? ' tp-ime' : '') + (session.hints !== 'off' ? ' tp-annotated' : ''),
+        'data-cursor-shape': cursorPreference.shape, 'data-cursor-glow': String(cursorPreference.glow), 'data-cursor-blink': String(cursorPreference.blink) },
         h('div', { className: 'tp-page' },
           h('header', { className: 'tp-header' },
             h('div', null,
@@ -1718,6 +1825,12 @@ window.__ModuleLoader__.load({
                   if (current.startAt != null && !current.result || compositionRef.current.active) return;
                   cancelCorpus(); stopSound(); setSoundOpen(true);
                 } }, t('sound')),
+              h('button', { className: 'tp-btn', type: 'button', ref: cursorButtonRef, disabled: running,
+                title: running ? t('cursorRunning') : undefined, 'aria-haspopup': 'dialog', onClick: () => {
+                  const current = sessionRef.current;
+                  if (current.startAt != null && !current.result || compositionRef.current.active) return;
+                  cancelCorpus(); stopSound(); setCursorOpen(true);
+                } }, t('cursor')),
             ),
           ),
           h('div', { className: 'tp-corpus-bar' },
@@ -1805,7 +1918,7 @@ window.__ModuleLoader__.load({
             },
               h('div', { className: 'tp-timebar-fill', style: { width: (progress * 100).toFixed(1) + '%' } }),
             ),
-            h('div', { className: 'tp-board-wrap', onClick: focusInput },
+            h('div', { className: 'tp-board-wrap' + (composition.active ? ' tp-composing' : ''), onClick: focusInput },
               h('div', { className: 'tp-viewport', ref: viewportRef, tabIndex: -1 },
                 h(TextBoard, {
                   text: session.text,
@@ -1899,6 +2012,7 @@ window.__ModuleLoader__.load({
           ),
           renderRecords(),
           renderSound(),
+          renderCursor(),
         ),
       );
     }
