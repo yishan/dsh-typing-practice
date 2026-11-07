@@ -7,7 +7,7 @@
 // kept locally, separated from ephemeral conversation text.
 
 window.__ModuleLoader__.load({
-  id: 'typing-practice',
+  id: 'dsh-typing-practice',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

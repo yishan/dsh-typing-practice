@@ -38,7 +38,7 @@ for (const [name, annotate] of Object.entries({ pinyin, jyutping })) {
     vm.runInNewContext(readFileSync(new URL(`../client.${name}.js`, import.meta.url), 'utf8'), {
       window: { __ModuleLoader__: { load(row) { registration = row; } } },
     });
-    assert.equal(registration.id, 'typing-practice');
+    assert.equal(registration.id, 'dsh-typing-practice');
     assert.equal(registration.chunk, `client.${name}.js`);
     const engine = registration.factory(() => { throw new Error('Unexpected external dependency'); });
     const text = '銀行行路，我哋返屋企。';

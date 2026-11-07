@@ -72,7 +72,7 @@ https://github.com/yishan/dsh-typing-practice
 If the `dsh` CLI is available, install it from npm:
 
 ```bash
-dsh plugin --profile <profile> add typing-practice
+dsh plugin --profile <profile> add dsh-typing-practice
 ```
 
 You can also install from GitHub through the CLI:
