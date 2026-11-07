@@ -63,23 +63,25 @@
 
 ## 安装
 
-本插件是 DSH 的 bundle。克隆后，在 DSH 里让 agent 用 `plugin_manager` 安装**这个目录**：
+本插件是 DSH 的 bundle，可在插件管理中通过 GitHub 仓库安装：
+
+```text
+https://github.com/yishan/dsh-typing-practice
+```
+
+如果环境中有 `dsh` CLI，可从 npm 安装：
 
 ```bash
-git clone https://github.com/yishan/dsh-typing-practice.git
+dsh plugin --profile <profile> add typing-practice
 ```
 
-```
-plugin_manager(action: "install_bundle", target: "/absolute/path/to/dsh-typing-practice")
-```
-
-如果你的环境里有 `dsh` CLI，也可以直接：
+也可以通过 CLI 从 GitHub 安装：
 
 ```bash
-dsh plugin --profile <profile> add /absolute/path/to/dsh-typing-practice
+dsh plugin --profile <profile> add github:yishan/dsh-typing-practice
 ```
 
-安装后刷新 DSH Web 页面，左侧栏会出现「打字练习」。仓库包含已构建的注音与音效文件，无需自行构建。插件安装在所选 DSH profile 下，该 profile 的所有会话均可使用。
+安装后刷新 DSH Web 页面，左侧栏会出现「打字练习」。Host、注音与音效均已打包，无需源码目录、手动安装依赖或自行构建。插件安装在所选 DSH profile 下，该 profile 的所有会话均可使用。
 
 更新后，可在插件管理页关闭再开启「打字练习」，然后刷新页面。卸载时使用 `plugin_manager`。
 

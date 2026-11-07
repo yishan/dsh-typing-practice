@@ -63,23 +63,25 @@ The four sound packs use MIT-licensed recordings from [kbsim](https://github.com
 
 ## Installation
 
-This plugin is a DSH bundle. Clone the repository, then ask the agent in DSH to install **the cloned directory** with `plugin_manager`:
+This plugin is a DSH bundle. Install it from GitHub in plugin management:
+
+```text
+https://github.com/yishan/dsh-typing-practice
+```
+
+If the `dsh` CLI is available, install it from npm:
 
 ```bash
-git clone https://github.com/yishan/dsh-typing-practice.git
+dsh plugin --profile <profile> add typing-practice
 ```
 
-```
-plugin_manager(action: "install_bundle", target: "/absolute/path/to/dsh-typing-practice")
-```
-
-If the `dsh` CLI is available in your environment, you can also run:
+You can also install from GitHub through the CLI:
 
 ```bash
-dsh plugin --profile <profile> add /absolute/path/to/dsh-typing-practice
+dsh plugin --profile <profile> add github:yishan/dsh-typing-practice
 ```
 
-Refresh the DSH Web UI after installation. **Typing practice** will appear in the left sidebar. The repository includes prebuilt pronunciation and sound files, so no build step is required. The plugin is installed in the selected DSH profile and is available to all chats in that profile.
+Refresh the DSH Web UI after installation. **Typing practice** will appear in the left sidebar. The Host, pronunciation engines and sounds are bundled. Installation needs no source checkout, manual dependency installation or build step. The plugin is installed in the selected DSH profile and is available to all chats in that profile.
 
 After updating, turn **Typing practice** off and on again in plugin management, then refresh the page. Use `plugin_manager` to uninstall it.
 

@@ -1,7 +1,6 @@
 {
   "name": "typing-practice",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.1",
   "type": "module",
   "description": "English, Chinese and Cantonese typing practice in DSH with native IME input, live speed and local best scores.",
   "license": "MIT",
@@ -9,7 +8,7 @@
     "test": "node --test",
     "check:corpus": "node scripts/check-corpus.mjs",
     "build": "node scripts/build.mjs",
-    "prepack": "npm run build"
+    "prepublishOnly": "npm run build && npm test"
   },
   "repository": {
     "type": "git",
@@ -41,11 +40,7 @@
     "client.pinyin.js",
     "client.jyutping.js",
     "client.audio.js",
-    "THIRD_PARTY_NOTICES.md",
-    "src/corpus.js",
-    "src/corpus-routes.js",
-    "src/text-policy.js",
-    "src/passage-lengths.js"
+    "THIRD_PARTY_NOTICES.md"
   ],
   "dsh": {
     "bundle": {
@@ -58,12 +53,14 @@
       ]
     }
   },
-  "dependencies": {
+  "devDependencies": {
+    "esbuild": "0.28.2",
     "mdast-util-from-markdown": "2.0.2",
     "pinyin-pro": "3.29.5",
     "to-jyutping": "3.1.1"
   },
-  "devDependencies": {
-    "esbuild": "0.28.2"
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }
