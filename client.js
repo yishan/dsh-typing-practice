@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
     const zh = {
       panelLabel: '打字练习',
       panelTitle: '打字练习',
-      panelSubtitle: '实时统计速度与准确率',
+      panelSubtitle: '实时统计速度与准确率，',
       bestValue: '最佳 {speed} {unit} · {acc}%',
       legacyBestValue: '旧版最佳 {speed} WPM · {acc}%',
       bestNone: '暂无最佳记录',
@@ -98,7 +98,7 @@ window.__ModuleLoader__.load({
       corpusEmpty: '本次未找到合适的近期语料，已使用默认语料。',
       corpusUnavailable: '本地对话暂不可用，已使用默认语料。',
       corpusPassage: '完成一段', corpusElapsed: '用时', corpusCompleted: '已完成 · {seconds} 秒',
-      corpusCount: '{n} 字符', corpusFooter: '仅保存练习统计与片段指纹，不保存对话正文。',
+      corpusCount: '{n} 字符', corpusFooter: '练习记录仅存本机，不额外保存对话原文。',
       records: '记录', recordsTitle: '练习记录', recordsClose: '关闭记录',
       recordsRunning: '完成或重新开始后可查看记录', recordsRecent: '最近练习', recordsBest: '限时最佳',
       recordsAll: '全部语言', recordsLanguage: '记录语言', recordsEmpty: '完成一轮练习后，成绩会出现在这里。',
@@ -135,7 +135,7 @@ window.__ModuleLoader__.load({
     const en = {
       panelLabel: 'Typing practice',
       panelTitle: 'Typing practice',
-      panelSubtitle: 'Live speed and accuracy',
+      panelSubtitle: 'Live speed and accuracy. ',
       bestValue: 'Best {speed} {unit} · {acc}%',
       legacyBestValue: 'Legacy best {speed} WPM · {acc}%',
       bestNone: 'No best score yet',
@@ -188,7 +188,7 @@ window.__ModuleLoader__.load({
       corpusEmpty: 'No suitable recent text found. Using built-in text.',
       corpusUnavailable: 'Local history is unavailable. Using built-in text.',
       corpusPassage: 'Complete a passage', corpusElapsed: 'Elapsed', corpusCompleted: 'Completed · {seconds}s',
-      corpusCount: '{n} characters', corpusFooter: 'Only statistics and a passage fingerprint are saved, never conversation text.',
+      corpusCount: '{n} characters', corpusFooter: 'Practice records stay on this device. No extra copy of your conversations is saved.',
       records: 'Records', recordsTitle: 'Practice records', recordsClose: 'Close records',
       recordsRunning: 'Finish or restart this run to view records', recordsRecent: 'Recent practice', recordsBest: 'Timed bests',
       recordsAll: 'All languages', recordsLanguage: 'Record language', recordsEmpty: 'Complete a practice run to see your results here.',
@@ -686,10 +686,6 @@ return module.exports; })();
   letter-spacing: -0.015em;
 }
 .tp-subtitle {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 3px 12px;
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--dsw-alias-label-secondary);
@@ -2153,7 +2149,7 @@ return module.exports; })();
               h('div', { className: 'tp-logo', 'aria-hidden': true }, h(PanelIcon, { size: 28, active: true })),
               h('div', { className: 'tp-brandtext' },
                 h('h1', { className: 'tp-title' }, t('panelTitle')),
-                h('p', { className: 'tp-subtitle' }, h('span', null, t('panelSubtitle')),
+                h('p', { className: 'tp-subtitle' }, t('panelSubtitle'),
                   h('span', { className: 'tp-privacy-note' }, t('corpusFooter')))),
             ),
             h('div', { className: 'tp-header-actions' },
