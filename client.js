@@ -28,6 +28,11 @@ window.__ModuleLoader__.load({
     const HINT_KEY = 'dsh.typing-practice.annotations.v1';
     const RULES_VERSION = 2;
     const DURATIONS = [15, 30, 60];
+    const OPTION_SHORTCUTS = [
+      { id: 'language', key: 'T', label: 'languageLabel' },
+      { id: 'duration', key: 'D', label: 'durationLabel' },
+      { id: 'length', key: 'L', label: 'lengthLabel' },
+    ];
     const DEFAULT_DURATION = 30;
     const TEXT_CHARS = 1200;
 
@@ -60,6 +65,7 @@ window.__ModuleLoader__.load({
       length_short: '短篇', length_medium: '中篇', length_long: '长篇',
       exerciseSaveError: '练习选项未能保存，下次打开时可能需要重新选择。',
       durationLabel: '练习时长',
+      lengthLabel: '篇幅',
       durationOption: '{n} 秒',
       statsWpm: 'WPM',
       statsAccuracy: '准确率',
@@ -145,6 +151,7 @@ window.__ModuleLoader__.load({
       length_short: 'Short', length_medium: 'Medium', length_long: 'Long',
       exerciseSaveError: 'Practice options could not be saved. Select them again next time.',
       durationLabel: 'Test duration',
+      lengthLabel: 'Passage length',
       durationOption: '{n}s',
       statsWpm: 'WPM',
       statsAccuracy: 'Accuracy',
@@ -206,6 +213,7 @@ window.__ModuleLoader__.load({
     const dictionaries = { zh, en };
     let activeLanguage = 'zh';
     let localeService = null;
+    let getShortcuts = () => null;
 
     function interpolate(text, vars) {
       return String(text == null ? '' : text).replace(/\{(\w+)\}/g, (match, key) => {
@@ -666,10 +674,11 @@ return module.exports; })();
 .tp-practice-options { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; }
 .tp-seg.tp-practice-controls { display: flex; align-items: stretch; max-width: 100%; gap: 8px; }
 .tp-language { display: grid; grid-template-columns: repeat(3, minmax(44px, max-content)); gap: 2px; }
-.tp-exercise { display: grid; grid-template-columns: repeat(6, minmax(44px, max-content)); gap: 2px; padding-left: 9px; border-left: 1px solid var(--dsw-alias-border-l1); }
+.tp-exercise { display: flex; gap: 10px; padding-left: 9px; border-left: 1px solid var(--dsw-alias-border-l1); }
+.tp-option-group { position: relative; }
+.tp-preset-group { display: grid; grid-template-columns: repeat(3, minmax(44px, max-content)); gap: 2px; }
+.tp-preset-group + .tp-preset-group::before { content: ''; position: absolute; left: -6px; top: 10px; bottom: 10px; border-left: 1px solid var(--dsw-alias-border-l1); }
 .tp-exercise .tp-seg-btn { position: relative; padding-inline: 12px; white-space: nowrap; }
-.tp-exercise .tp-seg-btn:nth-child(4) { margin-left: 8px; }
-.tp-exercise .tp-seg-btn:nth-child(4)::before { content: ''; position: absolute; left: -6px; top: 10px; bottom: 10px; border-left: 1px solid var(--dsw-alias-border-l1); }
 .tp-seg {
   display: inline-flex;
   gap: 2px;
@@ -954,6 +963,7 @@ return module.exports; })();
 .tp-action { position: relative; display: inline-flex; }
 .tp-shortcut-tip { position: absolute; left: 50%; bottom: calc(100% + 8px); z-index: 10; padding: 5px 9px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font-size: 11.5px; white-space: nowrap; visibility: hidden; opacity: 0; transform: translate(-50%, 4px); pointer-events: none; transition: opacity 120ms ease-out, transform 120ms ease-out, visibility 120ms; }
 .tp-action .tp-btn:focus-visible + .tp-shortcut-tip { visibility: visible; opacity: 1; transform: translate(-50%, 0); transition: none; }
+.tp-option-group:has(.tp-seg-btn:focus-visible) > .tp-shortcut-tip { visibility: visible; opacity: 1; transform: translate(-50%, 0); transition: none; }
 .tp-instructions { display: grid; min-width: 0; flex: 1; font-size: 11.5px; line-height: 18px; }
 .tp-btn {
   display: inline-flex;
@@ -988,6 +998,7 @@ return module.exports; })();
 @media (hover: hover) and (pointer: fine) {
   .tp-btn.tp-quiet:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-1); border-color: var(--dsw-alias-border-l2); }
   .tp-action:hover .tp-shortcut-tip { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
+  .tp-option-group:hover > .tp-shortcut-tip { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
 }
 .tp-btn.tp-quiet:active:not(:disabled) { background: var(--dsw-alias-bg-layer-2); }
 .tp-toast-layer { position: absolute; inset: 12px 0 auto; height: 0; z-index: 20; display: flex; justify-content: center; pointer-events: none; }
@@ -1070,9 +1081,9 @@ return module.exports; })();
   .tp-practice-options { width: 100%; }
   .tp-seg.tp-practice-controls { flex-direction: column; width: 100%; gap: 3px; }
   .tp-language { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .tp-exercise { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 3px 0 0; border-left: 0; border-top: 1px solid var(--dsw-alias-border-l1); }
-  .tp-exercise .tp-seg-btn:nth-child(4) { margin-left: 0; }
-  .tp-exercise .tp-seg-btn:nth-child(4)::before { content: none; }
+  .tp-exercise { flex-direction: column; gap: 2px; padding: 3px 0 0; border-left: 0; border-top: 1px solid var(--dsw-alias-border-l1); }
+  .tp-preset-group { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tp-preset-group + .tp-preset-group::before { content: none; }
 }
 @media (max-width: 680px) {
   .tp-actions { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
@@ -1304,6 +1315,8 @@ return module.exports; })();
       const [composition, setComposition] = React.useState({ active: false, text: '' });
       const compositionRef = React.useRef({ active: false, anchor: 0 });
       const inputRef = React.useRef(null);
+      const rootRef = React.useRef(null);
+      const shortcutHandlerRef = React.useRef(null);
       const previewRef = React.useRef(null);
       const viewportRef = React.useRef(null);
       const sessionRef = React.useRef(session);
@@ -1570,11 +1583,11 @@ return module.exports; })();
         setCorpusPreferenceError(!saveCorpusPreference(source));
       }
 
-      function changeExercise(preset) {
+      function changeExercise(preset, focus = false) {
         const next = exerciseFor(preset);
         if (!next || next.preset === exercisePreference.preset) return;
         setExercisePreference(next);
-        restart(next.duration, false, session.language, session.hints, null, null, next);
+        restart(next.duration, focus, session.language, session.hints, null, null, next);
       }
 
       function exerciseKeyDown(event, index) {
@@ -1584,7 +1597,7 @@ return module.exports; })();
           Home: 0, End: presets.length - 1 };
         if (!Object.hasOwn(keys, event.key)) return;
         event.preventDefault();
-        event.currentTarget.parentElement.querySelectorAll('[role="radio"]')[keys[event.key]].focus();
+        event.currentTarget.closest('[role="radiogroup"]').querySelectorAll('[role="radio"]')[keys[event.key]].focus();
         changeExercise(presets[keys[event.key]]);
       }
 
@@ -1678,10 +1691,17 @@ return module.exports; })();
       }
 
       function handlePracticeShortcut(event) {
-        const next = event.key?.toLowerCase() === 'r' && !event.shiftKey && !event.altKey
+        const primary = !event.shiftKey && !event.altKey
           && (isApple ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey);
+        const next = primary && (event.code === 'KeyR' || event.key?.toLowerCase() === 'r');
         const reset = event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
-        if ((!next && !reset) || event.defaultPrevented) return;
+        const cycle = primary
+          ? OPTION_SHORTCUTS.find(option => event.code === 'Key' + option.key || event.key?.toUpperCase() === option.key) : null;
+        if ((!next && !reset && !cycle) || event.defaultPrevented) return;
+        const inside = rootRef.current?.contains(event.target);
+        if (!inside && ((!next && !cycle) || event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .xterm'))) return;
+        const modal = document.querySelector('dialog[open], [aria-modal="true"]');
+        if (modal && !rootRef.current?.contains(modal)) return;
         // Keep native candidate/select Escape and modal dismissal intact. A
         // matching reload chord is suppressed here even when no action is safe.
         if (next) event.preventDefault();
@@ -1691,8 +1711,49 @@ return module.exports; })();
         event.preventDefault(); event.stopPropagation();
         if (event.repeat || input.repeat) return;
         if (next) void nextPassage();
-        else restartCurrent();
+        else if (cycle?.id === 'language') {
+          restart(session.duration, true, LANGUAGES[(LANGUAGES.indexOf(session.language) + 1) % LANGUAGES.length]);
+        } else if (cycle) {
+          const presets = cycle.id === 'duration' ? DURATIONS.map(String) : PracticeCorpus.TEXT_LENGTHS;
+          // Entering the other mode starts at its first option; the six
+          // presets still share one selection and one persisted preference.
+          changeExercise(presets[(presets.indexOf(exercisePreference.preset) + 1) % presets.length], true);
+        } else restartCurrent();
       }
+
+      function optionShortcutTip(option) {
+        return h('span', { className: 'tp-shortcut-tip', id: 'tp-' + option.id + '-shortcut', role: 'tooltip' },
+          isApple ? '⌘ ' + option.key : 'Ctrl+' + option.key);
+      }
+
+      shortcutHandlerRef.current = handlePracticeShortcut;
+      React.useEffect(() => {
+        // Desktop DSH consumes native bindings before DOM keydown. Reserve
+        // these fixed actions only while this page is mounted, then restore
+        // host bindings on unmount. Older hosts still use the DOM listener.
+        const commands = [{
+          id: 'typing-practice.next-passage',
+          label: () => t('panelLabel') + ' · ' + t('corpusNext'),
+          keys: [isApple ? '⌘' : 'Ctrl', 'R'],
+          bindings: [{ code: 'KeyR', modifiers: [isApple ? 'meta' : 'control'] }],
+          group: 'application',
+        }, ...OPTION_SHORTCUTS.map(option => ({
+          id: 'typing-practice.cycle-' + option.id,
+          label: () => t('panelLabel') + ' · ' + t(option.label),
+          keys: [isApple ? '⌘' : 'Ctrl', option.key],
+          bindings: [{ code: 'Key' + option.key, modifiers: [isApple ? 'meta' : 'control'] }],
+          group: 'application',
+        }))];
+        const shortcuts = getShortcuts();
+        const releases = commands.map(command => shortcuts?.registerFixed?.(command));
+        const keydown = event => shortcutHandlerRef.current(event);
+        // Opening the page keeps focus on the sidebar; capture there as well.
+        window.addEventListener('keydown', keydown, true);
+        return () => {
+          window.removeEventListener('keydown', keydown, true);
+          for (const release of releases.reverse()) release?.();
+        };
+      }, [isApple]);
 
       function inputReady() {
         return ['off', 'ready'].includes(sessionRef.current.annotationState);
@@ -1984,7 +2045,7 @@ return module.exports; })();
       const running = session.startAt != null && !result || composition.active;
 
       return h('div', { className: 'tp-root' + (isIme ? ' tp-ime' : '') + (session.hints !== 'off' ? ' tp-annotated' : ''),
-        onKeyDownCapture: handlePracticeShortcut,
+        ref: rootRef,
         'data-cursor-shape': cursorPreference.shape, 'data-cursor-glow': String(cursorPreference.glow), 'data-cursor-blink': String(cursorPreference.blink) },
         h('div', { className: 'tp-toast-layer', role: 'status', 'aria-live': 'polite', 'aria-atomic': true },
           toast ? h('p', { className: 'tp-toast', key: toast.id }, t(toast.message)) : null),
@@ -2133,22 +2194,32 @@ return module.exports; })();
           h('div', { className: 'tp-toolbar' },
             h('div', { className: 'tp-practice-options' },
             h('div', { className: 'tp-seg tp-practice-controls' },
-              h('div', { className: 'tp-language', role: 'group', 'aria-label': t('languageLabel') },
+              h('div', { className: 'tp-language tp-option-group', role: 'group', 'aria-label': t('languageLabel'),
+                'aria-keyshortcuts': isApple ? 'Meta+T' : 'Control+T', 'aria-describedby': 'tp-language-shortcut' },
                 LANGUAGES.map((language) => h('button', {
                   key: language,
                   type: 'button',
                   className: 'tp-seg-btn' + (language === session.language ? ' active' : ''),
                   'aria-pressed': language === session.language,
+                  'aria-describedby': 'tp-language-shortcut',
                   onClick: () => restart(session.duration, false, language),
                 }, t('language_' + language))),
+                optionShortcutTip(OPTION_SHORTCUTS[0]),
               ),
               h('div', { className: 'tp-exercise', role: 'radiogroup', 'aria-label': t('exerciseLabel') },
-                [...DURATIONS.map(String), ...PracticeCorpus.TEXT_LENGTHS].map((preset, index) => h('button', {
+                [DURATIONS.map(String), PracticeCorpus.TEXT_LENGTHS].map((presets, groupIndex) => h('div', {
+                  key: OPTION_SHORTCUTS[groupIndex + 1].id, className: 'tp-preset-group tp-option-group', role: 'group',
+                  'aria-label': t(OPTION_SHORTCUTS[groupIndex + 1].label),
+                  'aria-keyshortcuts': (isApple ? 'Meta+' : 'Control+') + OPTION_SHORTCUTS[groupIndex + 1].key,
+                  'aria-describedby': 'tp-' + OPTION_SHORTCUTS[groupIndex + 1].id + '-shortcut',
+                }, presets.map((preset, index) => h('button', {
                   key: preset, type: 'button', role: 'radio',
                   className: 'tp-seg-btn' + (preset === exercisePreference.preset ? ' active' : ''),
                   'aria-checked': preset === exercisePreference.preset, tabIndex: preset === exercisePreference.preset ? 0 : -1,
-                  onKeyDown: event => exerciseKeyDown(event, index), onClick: () => changeExercise(preset),
-                }, PracticeCorpus.TEXT_LENGTHS.includes(preset) ? t('length_' + preset) : t('durationOption', { n: preset }))))),
+                  'aria-describedby': 'tp-' + OPTION_SHORTCUTS[groupIndex + 1].id + '-shortcut',
+                  onKeyDown: event => exerciseKeyDown(event, groupIndex * DURATIONS.length + index), onClick: () => changeExercise(preset),
+                }, PracticeCorpus.TEXT_LENGTHS.includes(preset) ? t('length_' + preset) : t('durationOption', { n: preset }))),
+                optionShortcutTip(OPTION_SHORTCUTS[groupIndex + 1]))))),
             ),
             h('div', { className: 'tp-corpus-controls' },
               h('div', { className: 'tp-seg', role: 'group', 'aria-label': t('corpusSource') },
@@ -2177,6 +2248,7 @@ return module.exports; })();
       apply(ctx) {
         const slots = ctx.get('slots');
         if (!slots) return;
+        getShortcuts = () => ctx.get('shortcuts');
 
         const locale = ctx.get('locale');
         if (locale) {

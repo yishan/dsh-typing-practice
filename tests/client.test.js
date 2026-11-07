@@ -39,7 +39,9 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   const dom = {
     activeElement: null, hidden: false, addEventListener: addListener, removeEventListener: removeListener,
     createElement: () => ({ setAttribute() {}, remove() {} }), head: { appendChild() {} },
+    querySelector: () => audio.externalModal || null,
   };
+  const rootElement = { contains: target => target === inputElement || target?.practice === true };
   const audioLoads = [];
   const React = {
     createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
@@ -111,7 +113,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     }
     return loadChunk(name);
   };
-  factory(require).apply({ get: (name) => ({ slots, locale })[name], effect: (callback) => callback() });
+  factory(require).apply({ get: (name) => ({ slots, locale, shortcuts: audio.shortcuts })[name], effect: (callback) => callback() });
 
   function render() {
     let renders = 0;
@@ -121,6 +123,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       pendingEffects = [];
       dirty = false;
       tree = Page();
+      if (tree.props.ref) tree.props.ref.current = rootElement;
       const input = find((node) => node.type === 'textarea');
       if (inputKey !== input.props.key) {
         inputKey = input.props.key;
@@ -141,6 +144,11 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       const match = find(predicate, child);
       if (match) return match;
     }
+  }
+
+  function findAll(predicate, node = tree) {
+    if (!node || typeof node !== 'object') return [];
+    return [...(predicate(node) ? [node] : []), ...(node.children || []).flat(Infinity).flatMap(child => findAll(predicate, child))];
   }
 
   render();
@@ -176,7 +184,8 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
         get defaultPrevented() { return prevented; },
         preventDefault() { prevented = true; }, stopPropagation() { stopped = true; },
       };
-      tree.props.onKeyDownCapture(event);
+      listeners.get('keydown')?.(event);
+      if (!stopped) tree.props.onKeyDownCapture?.(event);
       if (!stopped) find(node => node.type === 'textarea').props.onKeyDown(event);
       render();
       // Model the browser's default text edit. Browser/IME verification is
@@ -190,6 +199,17 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       }
       return prevented;
     },
+    windowKey(key, options = {}) {
+      let prevented = false;
+      const event = { key, target: {}, ...options,
+        get defaultPrevented() { return prevented; },
+        preventDefault() { prevented = true; }, stopPropagation() {},
+      };
+      listeners.get('keydown')?.(event);
+      render();
+      return prevented;
+    },
+    shortcutListenerActive: () => listeners.has('keydown'),
     input: dispatchInput,
     audioLoads,
     openSettings,
@@ -223,6 +243,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       render();
       if (label !== '英文' && hints !== null) setHints(hints);
     },
+    selectedLanguage: () => find(node => node.type === 'button' && node.props['aria-describedby'] === 'tp-language-shortcut' && node.props['aria-pressed']).children[0],
     hints: setHints,
     mode(value) {
       find(node => node.props.role === 'radio' && node.children[0] === (value === 'passage' ? '短篇' : '30 秒')).props.onClick(); render();
@@ -231,13 +252,13 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       find(node => node.props.role === 'radio' && node.children[0] === label + '篇').props.onClick(); render();
     },
     preset: () => find(node => node.props.role === 'radio' && node.props['aria-checked'])?.children[0],
-    presetOptions: () => find(node => node.props.role === 'radiogroup').children.flat(Infinity).map(node => ({ label: node.children[0], checked: node.props['aria-checked'], tabIndex: node.props.tabIndex })),
+    presetOptions: () => findAll(node => node.props.role === 'radio', find(node => node.props.role === 'radiogroup')).map(node => ({ label: node.children[0], checked: node.props['aria-checked'], tabIndex: node.props.tabIndex })),
     presetKey(key) {
       const group = find(node => node.props.role === 'radiogroup');
-      const radios = group.children.flat(Infinity);
+      const radios = findAll(node => node.props.role === 'radio', group);
       let focusIndex = -1, prevented = false;
       radios.find(node => node.props['aria-checked']).props.onKeyDown({ key, preventDefault() { prevented = true; },
-        currentTarget: { parentElement: { querySelectorAll: () => radios.map((_, index) => ({ focus() { focusIndex = index; } })) } } });
+        currentTarget: { closest: () => ({ querySelectorAll: () => radios.map((_, index) => ({ focus() { focusIndex = index; } })) }) } });
       render(); return { focusIndex, prevented };
     },
     retryAnnotations() {
@@ -263,6 +284,11 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     toastTimers: () => timeouts.size,
     shortcutLabel: () => find(node => node.props.id === 'tp-next-shortcut').children[0],
     shortcutAria: () => find(node => node.props.className?.includes('tp-corpus-next') && node.type === 'button').props['aria-keyshortcuts'],
+    optionShortcuts: () => findAll(node => node.props.role === 'group' && node.props['aria-keyshortcuts']).map(node => ({
+      label: node.props['aria-label'], keys: node.props['aria-keyshortcuts'],
+      tip: find(item => item.props.id === node.props['aria-describedby'])?.children[0],
+      described: findAll(item => item.type === 'button', node).every(item => item.props['aria-describedby'] === node.props['aria-describedby']),
+    })),
     settingsDisabled: () => find(node => node.type === 'button' && node.children[0] === '设置').props.disabled,
     settingsSections: () => find(node => node.props.className === 'tp-settings-content').children.flat(Infinity)
       .filter(node => node.type === 'section').map(node => node.children[0].children[0]),
@@ -1438,6 +1464,115 @@ test('Escape restarts the same text and clears a running or completed attempt', 
 });
 
 for (const platform of ['MacIntel', 'Win32', 'Linux']) {
+  test(`${platform}: option shortcuts cycle language and exclusive presets with the platform modifier`, async () => {
+    const app = mountClient(undefined, {}, false, undefined, undefined, undefined, { platform });
+    const apple = platform === 'MacIntel';
+    const modifiers = apple ? { metaKey: true } : { ctrlKey: true };
+    const press = key => app.windowKey(key, { code: 'Key' + key.toUpperCase(), ...modifiers });
+    app.hints('all');
+    app.length('中');
+    for (const language of ['zh', 'yue', 'en']) {
+      assert.equal(press('t'), true);
+      await app.settle();
+      assert.equal(app.selectedLanguage(), { zh: '中文', yue: '粤语', en: '英文' }[language]);
+      assert.equal(app.board().hints, language === 'en' ? 'off' : 'all');
+      assert.equal(app.preset(), '中篇');
+    }
+    app.input(app.board().text[0], 1000);
+    for (const [key, label, preset] of [
+      ['d', '15 秒', '15'], ['d', '30 秒', '30'], ['d', '60 秒', '60'], ['d', '15 秒', '15'],
+      ['l', '短篇', 'short'], ['l', '中篇', 'medium'], ['l', '长篇', 'long'], ['l', '短篇', 'short'],
+    ]) {
+      assert.equal(press(key), true);
+      assert.equal(app.preset(), label);
+      assert.equal(app.board().typed, '');
+      assert.equal(app.activeTimers(), 0);
+      assert.equal(app.presetOptions().filter(item => item.checked).length, 1);
+      assert.equal(app.presetOptions().filter(item => item.tabIndex === 0).length, 1);
+      assert.equal(JSON.parse(app.rawStorage('dsh.typing-practice.exercise.v2')).preset, preset);
+    }
+    assert.equal(app.records()?.history.length || 0, 0);
+    assert.deepEqual(app.optionShortcuts(), ['T', 'D', 'L'].map((key, i) => ({
+      label: ['语料语言', '练习时长', '篇幅'][i], keys: (apple ? 'Meta+' : 'Control+') + key,
+      tip: (apple ? '⌘ ' : 'Ctrl+') + key, described: true,
+    })));
+  });
+
+  test(`${platform}: option shortcuts reject extra modifiers, repeats, composition, editors and dialogs`, () => {
+    const host = { platform };
+    const app = mountClient(undefined, {}, false, undefined, undefined, undefined, host);
+    const modifiers = platform === 'MacIntel' ? { metaKey: true } : { ctrlKey: true };
+    const before = app.board().text;
+    const blocked = [
+      {}, platform === 'MacIntel' ? { ctrlKey: true } : { metaKey: true },
+      { ctrlKey: true, metaKey: true }, { ...modifiers, shiftKey: true }, { ...modifiers, altKey: true },
+      { ...modifiers, repeat: true }, { ...modifiers, isComposing: true }, { ...modifiers, nativeEvent: { keyCode: 229 } },
+      { ...modifiers, target: { closest: () => ({}) } },
+    ];
+    for (const key of ['t', 'd', 'l']) {
+      for (const options of blocked) {
+        app.windowKey(key, options);
+        assert.equal(app.board().text, before);
+        assert.equal(app.preset(), '30 秒');
+      }
+      host.externalModal = {};
+      app.windowKey(key, modifiers);
+      host.externalModal = null;
+      app.openSettings(); app.windowKey(key, modifiers); app.closeSound();
+      app.openRecords(); app.windowKey(key, modifiers); app.recordsEscape();
+      assert.equal(app.board().text, before);
+    }
+    app.language('中文');
+    const chinese = app.board().text;
+    app.compose('Start', '', '', 1000); app.compose('Update', 'ni', 'ni', 1100);
+    for (const key of ['t', 'd', 'l']) app.windowKey(key, modifiers);
+    assert.equal(app.composing(), true); assert.equal(app.board().text, chinese);
+    app.unmount();
+    assert.equal(app.windowKey('t', modifiers), false);
+  });
+
+  test(`${platform}: new-passage shortcut reaches the active page from sidebar focus and uses current options`, () => {
+    const app = mountClient(undefined, {}, false, undefined, undefined, undefined, { platform });
+    const modifiers = platform === 'MacIntel' ? { metaKey: true } : { ctrlKey: true };
+    const before = app.board().text;
+    assert.equal(app.windowKey('r', { code: 'KeyR', ...modifiers }), true);
+    assert.notEqual(app.board().text, before);
+    app.length('中');
+    const medium = app.board().text;
+    assert.equal(app.windowKey('r', { code: 'KeyR', ...modifiers }), true);
+    assert.notEqual(app.board().text, medium);
+    assert.equal(app.preset(), '中篇');
+    assert.ok(entries.some(entry => entry.language === 'en' && entry.length === 'medium' && entry.text === app.board().text));
+    app.unmount();
+    assert.equal(app.shortcutListenerActive(), false);
+    assert.equal(app.windowKey('r', modifiers), false);
+  });
+
+  test(`${platform}: reserves the four fixed chords from DSH native bindings only while the page is mounted`, () => {
+    const commands = new Map();
+    const shortcuts = { registerFixed(command) {
+      assert.equal(commands.has(command.id), false);
+      commands.set(command.id, command);
+      return () => commands.delete(command.id);
+    } };
+    const app = mountClient(undefined, {}, false, undefined, undefined, undefined, { platform, shortcuts });
+    assert.equal(commands.size, 4);
+    const command = commands.get('typing-practice.next-passage');
+    assert.equal(command.id, 'typing-practice.next-passage');
+    assert.equal(command.label(), '打字练习 · 换一段');
+    assert.deepEqual(JSON.parse(JSON.stringify(command.bindings)), [{ code: 'KeyR', modifiers: [platform === 'MacIntel' ? 'meta' : 'control'] }]);
+    for (const [id, key] of [['language', 'T'], ['duration', 'D'], ['length', 'L']]) {
+      const cycle = commands.get('typing-practice.cycle-' + id);
+      assert.deepEqual(JSON.parse(JSON.stringify(cycle.bindings)), [{ code: 'Key' + key, modifiers: [platform === 'MacIntel' ? 'meta' : 'control'] }]);
+      assert.deepEqual(Array.from(cycle.keys), [platform === 'MacIntel' ? '⌘' : 'Ctrl', key]);
+    }
+    app.restart();
+    app.windowKey('t', platform === 'MacIntel' ? { metaKey: true } : { ctrlKey: true });
+    assert.equal(commands.size, 4);
+    app.unmount();
+    assert.equal(commands.size, 0);
+  });
+
   test(`${platform}: new-passage shortcut uses the platform modifier, rejects repeats and preserves hard reload`, () => {
     const app = mountClient(undefined, {}, false, undefined, undefined, undefined, { platform });
     const apple = platform === 'MacIntel';
@@ -1453,6 +1588,50 @@ for (const platform of ['MacIntel', 'Win32', 'Linux']) {
     app.restart(); assert.equal(app.board().text, text);
   });
 }
+
+test('option shortcuts abort stale local requests and use the latest language and passage length', async () => {
+  const pending = [];
+  const app = mountClient(undefined, {}, false, undefined, () => new Promise(resolve => pending.push(resolve)));
+  app.source('本地对话语料');
+  app.windowKey('Unidentified', { code: 'KeyT', ctrlKey: true });
+  app.windowKey('d', { ctrlKey: true });
+  app.windowKey('l', { ctrlKey: true });
+  assert.equal(app.requests.length, 4);
+  assert.ok(app.requests.slice(0, 3).every(item => item.options.signal.aborted));
+  const params = new URL(app.requests.at(-1).url, 'http://localhost').searchParams;
+  assert.equal(params.get('language'), 'zh'); assert.equal(params.get('mode'), 'passage'); assert.equal(params.get('length'), 'short');
+  for (const resolve of pending.slice(0, 3)) resolve({ ok: true, json: async () => ({ candidate: timedCandidate() }) });
+  pending[3]({ ok: true, json: async () => ({ candidate: null, reason: 'empty' }) });
+  await app.settle();
+  assert.equal(app.selectedLanguage(), '中文'); assert.equal(app.preset(), '短篇');
+  assert.ok(entries.some(entry => entry.language === 'zh' && entry.length === 'short' && entry.text === app.board().text));
+});
+
+test('global next-passage shortcut leaves host editors and external dialogs alone, and keeps Escape local', () => {
+  const host = {};
+  const app = mountClient(undefined, {}, false, undefined, undefined, undefined, host);
+  const text = app.board().text;
+  assert.equal(app.windowKey('r', { ctrlKey: true, target: { closest: () => ({}) } }), false);
+  assert.equal(app.windowKey('Escape'), false);
+  host.externalModal = {};
+  assert.equal(app.windowKey('r', { ctrlKey: true }), false);
+  assert.equal(app.board().text, text);
+  host.externalModal = null;
+  app.openRecords();
+  app.windowKey('r', { ctrlKey: true });
+  assert.equal(app.board().text, text);
+  assert.equal(app.recordsOpen(), true);
+});
+
+test('new-passage shortcut recognizes the physical R key without bypassing composition protection', () => {
+  const app = mountClient();
+  const text = app.board().text;
+  assert.equal(app.key('Unidentified', 0, { code: 'KeyR', ctrlKey: true }), true);
+  assert.notEqual(app.board().text, text);
+  const next = app.board().text;
+  app.key('Process', 0, { code: 'KeyR', ctrlKey: true, nativeEvent: { keyCode: 229 } });
+  assert.equal(app.board().text, next);
+});
 
 test('composition and native candidate keys never restart or replace the passage', () => {
   const app = mountClient(); app.language('中文');

@@ -55,6 +55,7 @@ The four sound packs use MIT-licensed recordings from [kbsim](https://github.com
 - Click the text or focus it with `Tab` to start typing. Use your own input method to enter Chinese or Cantonese text.
 - **Restart** or `Esc`: practise the same text again.
 - **New passage**: use `⌘ R` on macOS or `Ctrl+R` on Windows / Linux. Hover over the button to see its shortcut.
+- **Cycle options**: use `⌘ T` for language, `⌘ D` for duration and `⌘ L` for passage length on macOS. Use `Ctrl` instead of `⌘` on Windows / Linux. Hover over an option group to see its shortcut.
 - **Records**: view personal bests and practice history after finishing or restarting a run.
 - Press `Esc` to close a dialog. Use `Tab` / `Shift+Tab` to move between controls.
 
