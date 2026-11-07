@@ -3,3 +3,6 @@ node_modules/
 *.log
 .playwright-cli/
 output/playwright/
+
+# Local planning, settings and validation documentation
+/docs/
