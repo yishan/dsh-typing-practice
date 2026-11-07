@@ -37,6 +37,7 @@
     "icon.svg",
     "LICENSE",
     "README.md",
+    "README.en.md",
     "client.pinyin.js",
     "client.jyutping.js",
     "client.audio.js",

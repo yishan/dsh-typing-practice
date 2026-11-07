@@ -4,9 +4,9 @@
 
 # dsh-typing-practice
 
-A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: English, Chinese and Cantonese text, recent local conversation passages, native IME input, Pinyin and Jyutping hints, live speed and accuracy, local best scores, practice history and optional mechanical keyboard sounds.
+**简体中文** | [English](README.en.md)
 
-给 DeepSeek Harness Web GUI 加的「打字练习」插件：英文、中文和粤语文本练习，可选默认语料或近期本地对话，使用自己的输入法上屏，可查看拼音或粤拼提示，实时统计速度与准确率，提供机械键盘音效选择，最佳成绩和练习历史存在本机浏览器。
+给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web GUI 加的「打字练习」插件：英文、中文和粤语文本练习，可选默认语料或近期本地对话，使用自己的输入法上屏，可查看拼音或粤拼提示，实时统计速度与准确率，提供机械键盘音效选择，最佳成绩和练习历史存在本机浏览器。
 
 > 非官方 DeepSeek Harness 插件。
 
@@ -35,18 +35,6 @@ A typing practice page for the [DeepSeek Harness](https://github.com/deepseek-ai
 | 长篇 | 140–220 | 280–440 | 32 |
 
 在页面下方选择语言和练习方式：`英文／中文／粤语 | 15 秒／30 秒／60 秒 | 短篇／中篇／长篇`。语言和练习方式各自单选。
-
-首次默认 30 秒，之后记住最后选择。限时练习在倒计时结束时结算；短篇／中篇／长篇各选择一篇完整文本，显示用时，打完结束。
-
-切换来源保留当前练习选项；切换练习方式或语言会重新选文。「重新开始」保留当前文本，「换一段」重新选文。
-
-默认短文均为本项目原创，随插件提供，按项目 MIT 许可分发。选文完全离线，不访问远程语料库，也不调用用户模型额度。
-
-默认语料和本地对话统一使用常用标点：英文使用 `"` 和 `'`，中文与粤语使用 `“”`。文本会清理装饰符号和多余空白，全角英文字母及数字转为半角；含不适合练习符号的本地句子会被跳过。
-
-练习输入仍严格匹配清理后的目标文本；不自动转换用户输入的简繁字或标点，也不删除输入法自动补全的成对标点。
-
-中文与粤语可在「设置 → 注音」中选择「当前词」「全部」或「关闭」。两种语言共用这个选项，切换后自动应用；更改注音会保留当前文本并重新开始。
 
 拼音与粤拼词库随插件提供，在本地加载，不调用远程注音服务。加载失败时可重试，或关闭注音继续练习。
 
@@ -92,7 +80,7 @@ dsh plugin --profile <profile> add /absolute/path/to/dsh-typing-practice
 
 更新后，可在插件管理页关闭再开启「打字练习」，然后刷新页面。卸载时使用 `plugin_manager`。
 
-## License
+## 许可
 
 [MIT](LICENSE)。随包注音依赖和键盘录音的版本、来源和许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
