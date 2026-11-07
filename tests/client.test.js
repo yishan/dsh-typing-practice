@@ -6,6 +6,8 @@ import vm from 'node:vm';
 import { createAudioPlayer } from '../src/audio-player.js';
 import { audioHarness, samplePacks } from './helpers/audio-context.js';
 import { entries } from '../src/practice-text.js';
+import * as pinyinEngine from '../src/pinyin.js';
+import * as jyutpingEngine from '../src/jyutping.js';
 
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
 
@@ -170,7 +172,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   function setHints(value) {
     openSettings();
     assert.equal(soundDialog.open, true, 'pronunciation settings must be available');
-    find(node => node.type === 'select' && node.props['aria-label'] === '拼音／粤拼').props.onChange({ currentTarget: { value } });
+    find(node => node.type === 'select' && node.props['aria-label'] === '显示范围').props.onChange({ currentTarget: { value } });
     render();
     closeSettings();
   }
@@ -292,7 +294,15 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     settingsDisabled: () => find(node => node.type === 'button' && node.children[0] === '设置').props.disabled,
     settingsSections: () => find(node => node.props.className === 'tp-settings-content').children.flat(Infinity)
       .filter(node => node.type === 'section').map(node => node.children[0].children[0]),
-    hintControl: () => find(node => node.type === 'select' && node.props['aria-label'] === '拼音／粤拼')?.props,
+    hintControl: () => find(node => node.type === 'select' && node.props['aria-label'] === '显示范围')?.props,
+    pinyinFormat(format) { find(node => node.type === 'button' && node.children[0] === (format === 'full' ? '全拼' : '双拼')).props.onClick(); render(); },
+    pinyinScheme(value) { find(node => node.type === 'select' && node.props['aria-label'] === '双拼方案').props.onChange({ currentTarget: { value } }); render(); },
+    pinyinControl: () => find(node => node.type === 'select' && node.props['aria-label'] === '双拼方案')?.props,
+    pinyinPreview: () => find(node => node.props.className === 'tp-pinyin-preview')?.props['aria-label'],
+    renderedReadings() {
+      const board = find(node => typeof node.props.text === 'string');
+      return findAll(node => node.type === 'rt', board.type(board.props));
+    },
     hintError: () => find(node => node.props.role === 'status', find(node => node.props.className === 'tp-sound-status tp-hint-status'))?.children[0],
     privacyInSubtitle: () => Boolean(find(node => node.props.className === 'tp-privacy-note', find(node => node.props.className === 'tp-subtitle'))),
     cursorShape(shape) { find(node => node.type === 'select' && node.props['aria-label'] === '形状').props.onChange({ currentTarget: { value: shape } }); render(); },
@@ -316,11 +326,11 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
     title: () => find((node) => node.type === 'h1').children[0],
     finished: () => Boolean(find((node) => node.props.className === 'tp-result')),
     saved: (language = 'en', hints = 'off') => {
-      const best = JSON.parse(storage.get('dsh.typing-practice.v3') || storage.get('dsh.typing-practice.v2') || '{"best":{}}').best;
+      const best = JSON.parse(storage.get('dsh.typing-practice.v4') || storage.get('dsh.typing-practice.v2') || '{"best":{}}').best;
       return Object.fromEntries(Object.entries(best).filter(([key]) => key.startsWith(language + ':') && key.split(':')[3] === (hints === 'off' ? 'plain' : hints)).map(([key, value]) => [key.split(':')[1], value]));
     },
     rawStorage: key => storage.get(key),
-    records: () => JSON.parse(storage.get('dsh.typing-practice.v3') || 'null'),
+    records: () => JSON.parse(storage.get('dsh.typing-practice.v4') || 'null'),
     comparison: () => find(node => node.props.className === 'tp-comparison')?.children[0],
     newRecord: () => find(node => node.props.className === 'tp-record')?.children[0],
     recordsDisabled: () => find(node => node.type === 'button' && node.props['aria-haspopup'] === 'dialog').props.disabled,
@@ -695,8 +705,8 @@ test('hint modes have distinct persistent bests and retain earlier plain scores'
     app.tick(31000 + i * 40000);
     assert.equal(app.saved('zh', hints)[30].speed, (i + 1) * 2);
   }
-  const stored = app.rawStorage('dsh.typing-practice.v3');
-  const restored = mountClient(undefined, { 'dsh.typing-practice.v3': stored });
+  const stored = app.rawStorage('dsh.typing-practice.v4');
+  const restored = mountClient(undefined, { 'dsh.typing-practice.v4': stored });
   restored.language('中文');
   for (const [i, hints] of ['off', 'current', 'all'].entries()) {
     restored.hints(hints);
@@ -1026,7 +1036,7 @@ test('old v3 history stays available and explicitly identifies the previous corp
   const old = { id: 'old-run', language: 'en', hints: 'off', rules: 2,
     mode: 'timed', source: 'builtin', duration: 30, status: 'completed', at: 123,
     elapsedMs: 30000, speed: 4, accuracy: 1, correct: 10, wrongKeys: 0, keystrokes: 10, targetLength: 1200, fingerprint: null };
-  const app = mountClient(undefined, { 'dsh.typing-practice.v3': JSON.stringify({ version: 3, best: {}, legacy: {}, history: [old] }) });
+  const app = mountClient(undefined, { 'dsh.typing-practice.v4': JSON.stringify({ version: 4, best: {}, legacy: {}, history: [old] }) });
   app.openRecords(); assert.match(app.recordsText(), /旧语料/); app.recordsEscape();
   app.input(app.board().text[0], 1000); app.tick(31000);
   assert.equal(app.records().history[1].id, old.id);
@@ -1075,8 +1085,8 @@ test('passage preferences and history survive reload, clearing records preserves
   const key = 'dsh.typing-practice.exercise.v2';
   const app = mountClient(); app.mode('passage'); app.length('长');
   app.input(app.board().text, 1000);
-  const preference = app.rawStorage(key), records = app.rawStorage('dsh.typing-practice.v3');
-  const reopened = mountClient(undefined, { [key]: preference, 'dsh.typing-practice.v3': records });
+  const preference = app.rawStorage(key), records = app.rawStorage('dsh.typing-practice.v4');
+  const reopened = mountClient(undefined, { [key]: preference, 'dsh.typing-practice.v4': records });
   assert.ok(entries.some(entry => entry.language === 'en' && entry.length === 'long' && entry.text === reopened.board().text));
   reopened.openRecords(); assert.match(reopened.recordsText(), /长/);
   reopened.recordAction('清空全部记录'); reopened.recordAction('确认清空');
@@ -1150,7 +1160,7 @@ test('passage comparison isolates original text, language and hint setting and s
   app.input('另', 6000); app.input('另一段中文。', 7000);
   assert.match(app.comparison(), /还没有同篇/);
   assert.deepEqual(app.saved('zh'), {});
-  const saved = app.rawStorage('dsh.typing-practice.v3');
+  const saved = app.rawStorage('dsh.typing-practice.v4');
   for (const forbidden of [text, '另一段中文', '示例对话', 'sessionId', 'fixture', 'title', 'typed', 'annotations']) assert.equal(saved.includes(forbidden), false);
   app.openRecords(); app.recordAction('同篇记录');
   assert.match(app.recordsText(), /此片段的练习/);
@@ -1162,7 +1172,7 @@ test('history survives remount, retains 100 newest runs and preserves all-time t
   const app = mountClient(); app.input(app.board().text.slice(0, 10), 1000); app.tick(31000);
   const seed = app.records(); const sample = seed.history[0];
   seed.history = Array.from({ length: 100 }, (_, i) => ({ ...sample, id: 'old-' + i, at: sample.at - i }));
-  const restored = mountClient(undefined, { 'dsh.typing-practice.v3': JSON.stringify(seed) });
+  const restored = mountClient(undefined, { 'dsh.typing-practice.v4': JSON.stringify(seed) });
   restored.input(restored.board().text[0], 1000); restored.tick(31000);
   assert.equal(restored.records().history.length, 100);
   assert.equal(restored.records().history[1].id, 'old-0');
@@ -1184,10 +1194,10 @@ test('clearing needs confirmation, is atomic, keeps source preference and does n
   app.recordsEscape(); assert.equal(app.recordsOpen(), true); assert.equal(app.records().history.length, 1);
   app.recordAction('清空全部记录'); app.recordAction('确认清空');
   app.refresh();
-  assert.deepEqual(app.records(), { version: 3, best: {}, legacy: {}, history: [] });
+  assert.deepEqual(app.records(), { version: 4, best: {}, legacy: {}, history: [] });
   assert.equal(app.rawStorage('dsh.typing-practice.preferences.v1'), preference);
   assert.equal(app.rawStorage('dsh.typing-practice.annotations.v1'), annotations);
-  const restored = mountClient(undefined, { ...initial, 'dsh.typing-practice.v3': app.rawStorage('dsh.typing-practice.v3') });
+  const restored = mountClient(undefined, { ...initial, 'dsh.typing-practice.v4': app.rawStorage('dsh.typing-practice.v4') });
   assert.equal(restored.bestText(), '暂无最佳记录');
   restored.openRecords(); restored.recordAction('限时最佳'); assert.doesNotMatch(restored.recordsText(), /旧版最佳/);
 });
@@ -1196,9 +1206,9 @@ test('failed clear retains records and can be retried without a partial deletion
   let fail = false;
   const app = mountClient(undefined, {}, () => fail);
   app.input(app.board().text[0], 1000); app.tick(31000);
-  const original = app.rawStorage('dsh.typing-practice.v3');
+  const original = app.rawStorage('dsh.typing-practice.v4');
   app.openRecords(); app.recordAction('清空全部记录'); fail = true; app.recordAction('确认清空');
-  assert.match(app.recordsText(), /未能清空/); assert.equal(app.rawStorage('dsh.typing-practice.v3'), original);
+  assert.match(app.recordsText(), /未能清空/); assert.equal(app.rawStorage('dsh.typing-practice.v4'), original);
   fail = false; app.recordAction('确认清空'); assert.equal(app.records().history.length, 0);
 });
 
@@ -1231,12 +1241,12 @@ test('malformed stored records are filtered and unknown text fields are removed 
   seed.history = [{ ...entry, text: 'PRIVATE BODY', title: 'PRIVATE TITLE' }, { ...entry },
     { ...entry, id: 'bad-language', language: 'constructor' }, { ...entry, id: 'bad-time', at: 1e20 },
     { ...entry, id: 'bad-duration', duration: 90 }, { ...entry, id: 'bad-errors', wrongKeys: 999 }, null];
-  const app = mountClient(undefined, { 'dsh.typing-practice.v3': JSON.stringify(seed) });
+  const app = mountClient(undefined, { 'dsh.typing-practice.v4': JSON.stringify(seed) });
   app.input(app.board().text[0], 1000); app.tick(31000);
   assert.equal(app.records().history.length, 2);
-  assert.equal(app.rawStorage('dsh.typing-practice.v3').includes('PRIVATE'), false);
-  for (const invalid of ['{', 'null', '{"version":3,"history":{},"best":null,"legacy":null}']) {
-    const empty = mountClient(undefined, { 'dsh.typing-practice.v3': invalid });
+  assert.equal(app.rawStorage('dsh.typing-practice.v4').includes('PRIVATE'), false);
+  for (const invalid of ['{', 'null', '{"version":4,"history":{},"best":null,"legacy":null}']) {
+    const empty = mountClient(undefined, { 'dsh.typing-practice.v4': invalid });
     empty.openRecords(); assert.match(empty.recordsText(), /完成一轮练习后/);
   }
 });
@@ -1400,10 +1410,10 @@ test('local timed runs enforce all three deadlines, isolate bests by source and 
     assert.ok(app.records().best[`en:${duration}:local:plain:2`]);
   }
   assert.deepEqual(app.records().best['en:30:builtin:plain:2:corpus2'], builtin);
-  const restored = mountClient(undefined, { 'dsh.typing-practice.v3': app.rawStorage('dsh.typing-practice.v3') });
+  const restored = mountClient(undefined, { 'dsh.typing-practice.v4': app.rawStorage('dsh.typing-practice.v4') });
   restored.openRecords(); assert.match(restored.recordsText(), /本地对话语料/);
   restored.recordAction('限时最佳'); assert.match(restored.recordsText(), /本地对话语料/);
-  assert.doesNotMatch(app.rawStorage('dsh.typing-practice.v3'), /The bus stop/);
+  assert.doesNotMatch(app.rawStorage('dsh.typing-practice.v4'), /The bus stop/);
   const recent = JSON.parse(app.rawStorage('dsh.typing-practice.recent.v1')).local.en;
   assert.deepEqual(recent, candidate.source.fingerprints);
   assert.deepEqual(new URL(app.requests.at(-1).url, 'http://localhost').searchParams.getAll('recent'), candidate.source.fingerprints);
@@ -1675,7 +1685,7 @@ test('all settings sections are available together while pronunciation stays sha
     await app.settle();
     const text = app.board().text;
     app.openSettings();
-    assert.equal(app.hintControl()['aria-label'], '拼音／粤拼');
+    assert.equal(app.hintControl()['aria-label'], '显示范围');
     assert.equal(app.hintControl().value, 'all');
     app.cursorShape('line');
     assert.equal(app.hintControl().value, 'all');
@@ -1699,9 +1709,9 @@ test('all hint modes persist from English settings and apply to Chinese and Cant
     assert.equal(app.board().text, text);
     assert.equal(app.finished(), true, 'changing the shared setting must not reset an English result');
     assert.deepEqual(calls, [], 'English preferences must not load a pronunciation engine');
-    const stored = app.rawStorage('dsh.typing-practice.annotations.v1');
-    assert.deepEqual(JSON.parse(stored), { version: 1, mode });
-    const restored = mountClient(undefined, { 'dsh.typing-practice.annotations.v1': stored });
+    const stored = app.rawStorage('dsh.typing-practice.annotations.v2');
+    assert.deepEqual(JSON.parse(stored), { version: 2, mode, pinyinFormat: 'full', pinyinScheme: 'xiaohe' });
+    const restored = mountClient(undefined, { 'dsh.typing-practice.annotations.v2': stored });
     restored.openSettings(); assert.equal(restored.hintControl().value, mode); restored.closeSound();
     for (const language of ['中文', '粤语']) {
       restored.language(language, null); await restored.settle();
@@ -1714,8 +1724,8 @@ test('all hint modes persist from English settings and apply to Chinese and Cant
 });
 
 test('invalid hint preferences use the default and failed saves still apply until a successful retry', async () => {
-  const key = 'dsh.typing-practice.annotations.v1';
-  for (const raw of ['broken json', 'null', '{"version":2,"mode":"all"}', '{"version":1,"mode":"invalid"}']) {
+  const key = 'dsh.typing-practice.annotations.v2';
+  for (const raw of ['broken json', 'null', '{"version":3,"mode":"all"}', '{"version":2,"mode":"invalid"}']) {
     const app = mountClient(undefined, { [key]: raw });
     app.openSettings(); assert.equal(app.hintControl().value, 'current');
   }
@@ -1741,6 +1751,199 @@ test('the privacy note stays beside the subtitle for every language and corpus s
     app.language(language);
     assert.equal(app.privacyInSubtitle(), true);
   }
+});
+
+const realPronunciation = async name => name === './client.pinyin.js' ? pinyinEngine : jyutpingEngine;
+const hintStorageKey = 'dsh.typing-practice.annotations.v2';
+
+test('Shuangpin can be preset in English without loading Mandarin or resetting a finished run', async () => {
+  const calls = [];
+  const app = mountClient(undefined, {}, false, async name => { calls.push(name); return realPronunciation(name); });
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  const text = app.board().text;
+  app.openSettings();
+  assert.equal(app.pinyinControl().disabled, true);
+  assert.match(app.pinyinPreview(), /shuāng pīn/);
+  app.pinyinFormat('shuangpin');
+  assert.equal(app.pinyinControl().value, 'xiaohe');
+  assert.equal(app.pinyinControl().disabled, false);
+  assert.match(app.pinyinPreview(), /ul pb/);
+  for (const scheme of ['xiaohe', 'ziranma', 'microsoft', 'sogou']) {
+    app.pinyinScheme(scheme);
+    const expected = pinyinEngine.formatReadings(pinyinEngine.annotate('双拼'), 'shuangpin', scheme).map(t => t.displayReading).join(' ');
+    assert.equal(app.pinyinPreview(), '注音预览: 双拼 · ' + expected);
+  }
+  app.closeSound(); await app.settle();
+  assert.equal(app.finished(), true);
+  assert.equal(app.board().text, text);
+  assert.deepEqual(calls, []);
+  const preference = app.rawStorage(hintStorageKey);
+  assert.deepEqual(JSON.parse(preference), { version: 2, mode: 'current', pinyinFormat: 'shuangpin', pinyinScheme: 'sogou' });
+  const restored = mountClient(undefined, { [hintStorageKey]: preference }, false, realPronunciation);
+  restored.openSettings(); assert.equal(restored.pinyinControl().value, 'sogou'); restored.closeSound();
+  restored.language('中文', null); await restored.settle();
+  assert.ok(restored.board().annotations.some(t => t.shuangpin));
+  assert.equal(restored.board().hints, 'current');
+});
+
+test('scheme switches retain original text, isolate cached readings and render the chosen hints', async () => {
+  let annotated = 0;
+  const app = mountClient(undefined, {}, false, async () => ({ ...pinyinEngine,
+    annotate(text) { annotated++; return pinyinEngine.annotate(text); } }));
+  app.language('中文', null); await app.settle();
+  await app.usePassage('双拼安英女略嗯。', 'zh'); await app.settle();
+  const text = app.board().text, full = app.board().annotations, before = annotated;
+  for (const [scheme, expected] of [
+    ['xiaohe', ['ul', 'pb', 'an', 'yk', 'nv', 'lt', 'ǹg']],
+    ['ziranma', ['ud', 'pn', 'an', 'yy', 'nv', 'lt', 'ǹg']],
+    ['microsoft', ['ud', 'pn', 'oj', 'y;', 'ny', 'lv', 'ǹg']],
+    ['sogou', ['ud', 'pn', 'oj', 'y;', 'ny', 'lt', 'ǹg']],
+  ]) {
+    app.openSettings(); app.pinyinFormat('shuangpin'); app.pinyinScheme(scheme); app.closeSound(); await app.settle();
+    assert.equal(app.board().text, text);
+    const readings = app.renderedReadings();
+    assert.deepEqual(readings.map(t => t.children[0]), expected);
+    assert.match(readings[0].props.className, /tp-shuangpin/);
+    assert.match(readings.at(-1).props.title, /显示全拼/);
+    assert.equal(readings.at(-1).props['aria-hidden'], true);
+    assert.equal(app.board().annotations[0].reading, 'shuāng');
+  }
+  assert.equal(annotated, before, 'scheme changes must reuse contextual pronunciation');
+  assert.equal(full[0].displayReading, undefined, 'shared cache is immutable');
+  app.openSettings(); app.pinyinFormat('full');
+  assert.equal(app.pinyinControl().disabled, true); assert.equal(app.pinyinControl().value, 'sogou');
+  app.closeSound(); await app.settle();
+  assert.equal(app.renderedReadings()[0].children[0], 'shuāng');
+  assert.equal(app.records(), null);
+});
+
+test('Cantonese retains Jyutping and its finished result when Mandarin preferences change', async () => {
+  const calls = [];
+  const app = mountClient(undefined, {}, false, async name => { calls.push(name); return realPronunciation(name); });
+  app.language('粤语', null); await app.settle();
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  const before = app.board().annotations;
+  app.openSettings(); app.pinyinFormat('shuangpin'); app.pinyinScheme('microsoft'); app.closeSound(); await app.settle();
+  assert.equal(app.board().annotations, before);
+  assert.equal(app.finished(), true);
+  assert.deepEqual(calls, ['./client.jyutping.js']);
+  assert.equal(app.records().history[0].pinyinScheme, null);
+  app.language('中文', null); await app.settle();
+  assert.ok(app.board().annotations.some(t => t.shuangpin));
+});
+
+test('disabled hints retain a preconfigured scheme, and IME scoring still counts committed Han characters', async () => {
+  const app = mountClient(undefined, {}, false, realPronunciation);
+  app.hints('off'); app.openSettings(); app.pinyinFormat('shuangpin'); app.pinyinScheme('xiaohe'); app.closeSound();
+  app.language('中文', null); await app.settle();
+  assert.equal(app.board().annotations, null);
+  app.hints('all'); await app.settle();
+  const target = app.board().text[0];
+  app.compose('Start', 'u', 'u', 1000);
+  app.compose('Update', 'ul', 'ul', 2000);
+  assert.equal(app.settingsDisabled(), true);
+  app.compose('End', target, target, 3000);
+  app.tick(31000);
+  const row = app.records().history[0];
+  assert.equal(row.correct, 1); assert.equal(row.keystrokes, 1);
+  assert.equal(row.elapsedMs, 30000); assert.equal(row.speed, 2);
+  assert.equal(row.pinyinFormat, 'shuangpin'); assert.equal(row.pinyinScheme, 'xiaohe');
+});
+
+test('changing the scheme during a pending pronunciation load cannot apply stale formatted tokens', async () => {
+  let complete;
+  const app = mountClient(undefined, {}, false, () => new Promise(resolve => { complete = resolve; }));
+  app.language('中文', null); await app.settle();
+  app.openSettings(); app.pinyinFormat('shuangpin'); app.pinyinScheme('microsoft'); app.pinyinScheme('xiaohe'); app.closeSound();
+  complete(pinyinEngine); await app.settle();
+  const expected = pinyinEngine.formatReadings(pinyinEngine.annotate(app.board().text), 'shuangpin', 'xiaohe');
+  assert.deepEqual(app.board().annotations.map(t => t.displayReading), expected.map(t => t.displayReading));
+});
+
+test('legacy hint range migrates to full Pinyin and malformed fields fall back independently', () => {
+  for (const mode of ['off', 'current', 'all']) {
+    const legacy = JSON.stringify({ version: 1, mode });
+    const app = mountClient(undefined, { 'dsh.typing-practice.annotations.v1': legacy });
+    app.openSettings(); assert.equal(app.hintControl().value, mode); assert.equal(app.pinyinControl().disabled, true);
+    app.pinyinFormat('shuangpin');
+    assert.deepEqual(JSON.parse(app.rawStorage(hintStorageKey)), { version: 2, mode, pinyinFormat: 'shuangpin', pinyinScheme: 'xiaohe' });
+    assert.equal(app.rawStorage('dsh.typing-practice.annotations.v1'), legacy);
+  }
+  for (const [input, expected] of [
+    [{ mode: 'all', pinyinFormat: 'shuangpin', pinyinScheme: 'constructor' }, ['all', false, 'xiaohe']],
+    [{ mode: 'off', pinyinFormat: 'invalid', pinyinScheme: 'microsoft' }, ['off', true, 'microsoft']],
+    [{ mode: 'invalid', pinyinFormat: 'shuangpin', pinyinScheme: 'sogou' }, ['current', false, 'sogou']],
+  ]) {
+    const app = mountClient(undefined, { [hintStorageKey]: JSON.stringify({ version: 2, ...input }) });
+    app.openSettings();
+    assert.deepEqual([app.hintControl().value, app.pinyinControl().disabled, app.pinyinControl().value], expected);
+  }
+});
+
+test('failed preference saves still apply Shuangpin in memory and a retry persists all fields', async () => {
+  let fail = true;
+  const app = mountClient(undefined, {}, key => fail && key === hintStorageKey, realPronunciation);
+  app.openSettings(); app.pinyinFormat('shuangpin'); app.pinyinScheme('sogou'); assert.match(app.hintError(), /未能保存/); app.closeSound();
+  app.language('中文', null); await app.settle();
+  assert.ok(app.board().annotations.some(t => t.shuangpin));
+  fail = false;
+  app.openSettings(); app.pinyinScheme('sogou'); assert.equal(app.hintError(), ''); app.closeSound();
+  assert.equal(JSON.parse(app.rawStorage(hintStorageKey)).pinyinScheme, 'sogou');
+});
+
+test('each Chinese hint scheme has separate timed bests that survive reload', async () => {
+  const app = mountClient(undefined, {}, false, realPronunciation);
+  app.language('中文', null); await app.settle();
+  const text = app.board().text;
+  for (const [i, scheme] of [null, 'xiaohe', 'ziranma', 'microsoft', 'sogou'].entries()) {
+    if (scheme) { app.openSettings(); app.pinyinFormat('shuangpin'); app.pinyinScheme(scheme); app.closeSound(); await app.settle(); }
+    assert.equal(app.board().text, text);
+    app.input(text.slice(0, i + 1), i * 40000 + 1000); app.tick(i * 40000 + 31000);
+    assert.match(app.comparison(), /首次完成/);
+  }
+  assert.equal(Object.keys(app.records().best).length, 5);
+  const raw = app.rawStorage('dsh.typing-practice.v4');
+  const restored = mountClient(undefined, { 'dsh.typing-practice.v4': raw }, false, realPronunciation);
+  restored.language('中文', null); await restored.settle(); assert.match(restored.bestText(), /最佳 2 /);
+  restored.openSettings(); restored.pinyinFormat('shuangpin'); restored.pinyinScheme('sogou'); restored.closeSound(); await restored.settle();
+  assert.match(restored.bestText(), /最佳 10 /);
+  restored.openRecords(); assert.match(restored.recordsText(), /全拼/);
+  for (const name of ['小鹤双拼', '自然码', '微软双拼', '搜狗双拼']) assert.ok(restored.recordsText().includes(name));
+  restored.recordAction('限时最佳'); assert.match(restored.recordsText(), /搜狗双拼/);
+  assert.equal(raw.includes(text), false);
+});
+
+test('same-passage comparison separates schemes but ignores stored Mandarin choices with hints off', async () => {
+  const app = mountClient(undefined, {}, false, realPronunciation);
+  app.language('中文', 'all'); await app.settle(); await app.usePassage('双拼。', 'zh'); await app.settle();
+  app.input('双', 1000); app.input('双拼。', 2000);
+  app.openSettings(); app.pinyinFormat('shuangpin'); app.closeSound(); await app.settle();
+  app.input('双', 3000); app.input('双拼。', 4000); assert.match(app.comparison(), /还没有同篇/);
+  app.openSettings(); app.pinyinFormat('full'); app.closeSound(); await app.settle();
+  app.input('双', 5000); app.input('双拼。', 6000); assert.match(app.comparison(), /近期同篇最佳/);
+  app.hints('off'); app.input('双', 7000); app.input('双拼。', 8000);
+  app.openSettings(); app.pinyinFormat('shuangpin'); app.pinyinScheme('microsoft'); app.closeSound();
+  assert.equal(app.finished(), true, 'an inactive preference must not reset a completed run');
+  app.restart(); app.input('双', 9000); app.input('双拼。', 10000); assert.match(app.comparison(), /近期同篇最佳/);
+  assert.equal(app.records().history[0].pinyinScheme, null);
+});
+
+test('v3 records migrate as full Pinyin and clearing v4 does not resurrect old history', async () => {
+  const seed = mountClient(undefined, {}, false, realPronunciation);
+  seed.language('中文', 'all'); await seed.settle(); seed.input(seed.board().text[0], 1000); seed.tick(31000);
+  const old = seed.records(); old.version = 3;
+  for (const entry of old.history) { delete entry.pinyinFormat; delete entry.pinyinScheme; }
+  const raw = JSON.stringify(old);
+  const app = mountClient(undefined, { 'dsh.typing-practice.v3': raw }, false, realPronunciation);
+  app.language('中文', 'all'); await app.settle(); assert.match(app.bestText(), /最佳 2 /);
+  app.openSettings(); app.pinyinFormat('shuangpin'); app.closeSound(); await app.settle(); assert.equal(app.bestText(), '暂无最佳记录');
+  app.input(app.board().text[0], 1000); app.tick(31000);
+  assert.equal(app.records().version, 4); assert.equal(app.records().history.length, 2);
+  assert.equal(app.records().history[1].pinyinFormat, 'full'); assert.equal(app.records().history[1].pinyinScheme, null);
+  assert.equal(app.rawStorage('dsh.typing-practice.v3'), raw);
+  app.openRecords(); app.recordAction('清空全部记录'); app.recordAction('确认清空');
+  const cleared = mountClient(undefined, { 'dsh.typing-practice.v3': raw, 'dsh.typing-practice.v4': app.rawStorage('dsh.typing-practice.v4') });
+  cleared.openRecords(); assert.doesNotMatch(cleared.recordsText(), /全拼|小鹤/);
 });
 
 test('fallback toasts expire after three seconds, restart their timer on repeat and clean up on unmount', async () => {

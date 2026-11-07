@@ -14,7 +14,8 @@ window.__ModuleLoader__.load({
     const NS = 'typing-practice';
     const LEGACY_STORE_KEY = 'dsh.typing-practice.v1';
     const STORE_KEY = 'dsh.typing-practice.v2';
-    const RECORDS_KEY = 'dsh.typing-practice.v3';
+    const PREVIOUS_RECORDS_KEY = 'dsh.typing-practice.v3';
+    const RECORDS_KEY = 'dsh.typing-practice.v4';
     const HISTORY_LIMIT = 100;
     const PREFERENCES_KEY = 'dsh.typing-practice.preferences.v1';
     const EXERCISE_KEY = 'dsh.typing-practice.exercise.v2';
@@ -25,7 +26,10 @@ window.__ModuleLoader__.load({
     const CURSOR_SHAPES = ['line', 'underline', 'outline'];
     const LANGUAGES = ['en', 'zh', 'yue'];
     const HINT_MODES = ['off', 'current', 'all'];
-    const HINT_KEY = 'dsh.typing-practice.annotations.v1';
+    const LEGACY_HINT_KEY = 'dsh.typing-practice.annotations.v1';
+    const HINT_KEY = 'dsh.typing-practice.annotations.v2';
+    const PINYIN_FORMATS = ['full', 'shuangpin'];
+    const SHUANGPIN_SCHEMES = ['xiaohe', 'ziranma', 'microsoft', 'sogou'];
     const RULES_VERSION = 2;
     const DURATIONS = [15, 30, 60];
     const OPTION_SHORTCUTS = [
@@ -111,7 +115,11 @@ window.__ModuleLoader__.load({
       newPassageRecord: '同篇新纪录',
       settings: '设置', settingsClose: '关闭设置', settingsRunning: '完成或重新开始后可调整设置',
       settingsLocalTextNote: '本地语料只读取当前 DSH 的本地对话，用于本次打字练习。对话正文不会上传到网络，也不会额外保存或用于其他用途，你可以放心练习。',
-      annotations: '注音', hintDisplay: '拼音／粤拼', hintSaveError: '注音选项未能保存，下次打开时需要重新选择。', liveStats: '实时输入统计',
+      annotations: '注音', hintDisplay: '显示范围', hintSaveError: '注音选项未能保存，下次打开时需要重新选择。', liveStats: '实时输入统计',
+      pinyinFormat: '拼音形式', pinyin_full: '全拼', pinyin_shuangpin: '双拼', shuangpinScheme: '双拼方案',
+      scheme_xiaohe: '小鹤双拼', scheme_ziranma: '自然码', scheme_microsoft: '微软双拼', scheme_sogou: '搜狗双拼',
+      pinyinNote: '仅在中文练习中提示', pinyinPreview: '注音预览',
+      pinyinFallback: '此读音暂无可靠双拼键码，显示全拼。',
       sound: '音效', soundTitle: '键盘音效', soundClose: '关闭音效设置', soundPack: '声音', soundVolume: '音量', soundPreview: '试听',
       sound_off: '关闭', sound_mxblue: 'Cherry MX Blue · 青轴', sound_mxbrown: 'Cherry MX Brown · 茶轴',
       sound_cream: 'NovelKeys Cream · 奶油轴', sound_holypanda: 'Holy Panda · 圣熊猫',
@@ -197,7 +205,11 @@ window.__ModuleLoader__.load({
       newPassageRecord: 'New passage best',
       settings: 'Settings', settingsClose: 'Close settings', settingsRunning: 'Finish or restart this run to change settings',
       settingsLocalTextNote: 'Local text comes from conversations in your current DSH and is used only for this practice session. Your conversation text is never uploaded, saved as an extra copy, or used for anything else, so you can practice with peace of mind.',
-      annotations: 'Pronunciation', hintDisplay: 'Pinyin / Jyutping', hintSaveError: 'Pronunciation settings could not be saved. Select them again next time.', liveStats: 'Live typing statistics',
+      annotations: 'Pronunciation', hintDisplay: 'Show hints', hintSaveError: 'Pronunciation settings could not be saved. Select them again next time.', liveStats: 'Live typing statistics',
+      pinyinFormat: 'Pinyin format', pinyin_full: 'Full Pinyin', pinyin_shuangpin: 'Shuangpin', shuangpinScheme: 'Shuangpin layout',
+      scheme_xiaohe: 'Xiaohe', scheme_ziranma: 'Ziranma', scheme_microsoft: 'Microsoft', scheme_sogou: 'Sogou',
+      pinyinNote: 'Only shown in Chinese practice', pinyinPreview: 'Pronunciation preview',
+      pinyinFallback: 'No reliable Shuangpin code for this reading. Showing full Pinyin.',
       sound: 'Sound', soundTitle: 'Keyboard sounds', soundClose: 'Close sound settings', soundPack: 'Sound', soundVolume: 'Volume', soundPreview: 'Preview',
       sound_off: 'Off', sound_mxblue: 'Cherry MX Blue', sound_mxbrown: 'Cherry MX Brown',
       sound_cream: 'NovelKeys Cream', sound_holypanda: 'Holy Panda',
@@ -280,9 +292,8 @@ return module.exports; })();
     // rejected loads are forgotten so retry is a real attempt.
     const engines = new Map();
     const annotationsCache = new Map();
-    function loadAnnotations(language, text) {
+    function loadAnnotations(language, text, pronunciation) {
       const key = language + ':' + text;
-      if (annotationsCache.has(key)) return Promise.resolve(annotationsCache.get(key));
       if (!engines.has(language)) {
         const name = language === 'zh' ? 'pinyin' : 'jyutping';
         engines.set(language, Promise.resolve().then(() => require.async(`./client.${name}.js`)).catch(error => {
@@ -291,33 +302,56 @@ return module.exports; })();
         }));
       }
       return engines.get(language).then(engine => {
-        const tokens = engine.annotate(text);
+        const tokens = annotationsCache.get(key) || engine.annotate(text);
         if (!Array.isArray(tokens) || tokens.map(token => token.char).join('') !== text
           || tokens.length !== characters(text).length) throw new Error('Invalid pronunciation alignment');
         annotationsCache.set(key, tokens);
         if (annotationsCache.size > 24) annotationsCache.delete(annotationsCache.keys().next().value);
-        return tokens;
+        // Cache contextual readings only. Formatting creates separate tokens,
+        // so a scheme switch cannot reuse or mutate another scheme's hints.
+        return language === 'zh' && pronunciation?.pinyinFormat === 'shuangpin'
+          ? engine.formatReadings(tokens, pronunciation.pinyinFormat, pronunciation.pinyinScheme) : tokens;
       });
     }
 
     // ---------- local records ----------
 
-    function recordKey(language, duration, hints = 'off', corpusVersion = PracticeCorpus.CORPUS_VERSION, source = 'builtin') {
-      return `${language}:${duration}:${source}:${hints === 'off' ? 'plain' : hints}:${RULES_VERSION}${source === 'local' || corpusVersion === 1 ? '' : ':corpus' + corpusVersion}`;
+    function effectivePinyin(language, hints, preference = {}) {
+      const shuangpin = language === 'zh' && hints !== 'off' && preference.pinyinFormat === 'shuangpin';
+      return { pinyinFormat: shuangpin ? 'shuangpin' : 'full',
+        pinyinScheme: shuangpin && SHUANGPIN_SCHEMES.includes(preference.pinyinScheme) ? preference.pinyinScheme : shuangpin ? 'xiaohe' : null };
+    }
+
+    function hintIdentity(language, hints, pronunciation) {
+      const effective = effectivePinyin(language, hints, pronunciation);
+      return (hints === 'off' ? 'plain' : hints) + (effective.pinyinScheme ? '~' + effective.pinyinScheme : '');
+    }
+
+    function hintDescription(language, hints, pronunciation) {
+      const range = t('hint_' + hints);
+      if (language !== 'zh' || hints === 'off') return range;
+      const effective = effectivePinyin(language, hints, pronunciation);
+      return range + ' · ' + t(effective.pinyinScheme ? 'scheme_' + effective.pinyinScheme : 'pinyin_full');
+    }
+
+    function recordKey(language, duration, hints = 'off', corpusVersion = PracticeCorpus.CORPUS_VERSION, source = 'builtin', pronunciation) {
+      return `${language}:${duration}:${source}:${hintIdentity(language, hints, pronunciation)}:${RULES_VERSION}${source === 'local' || corpusVersion === 1 ? '' : ':corpus' + corpusVersion}`;
     }
 
     function sanitizeBest(stored) {
       if (!stored || typeof stored !== 'object') return {};
       const best = {};
       for (const language of LANGUAGES) for (const duration of DURATIONS) for (const hints of language === 'en' ? ['off'] : HINT_MODES) for (const [source, corpusVersion] of [['builtin', 1], ['builtin', PracticeCorpus.CORPUS_VERSION], ['local', null]]) {
-        const key = recordKey(language, duration, hints, corpusVersion, source);
-        const entry = stored[key];
-        if (!entry || !Number.isFinite(entry.speed) || entry.speed < 0) continue;
-        best[key] = {
-          speed: Math.round(entry.speed),
-          accuracy: Number.isFinite(entry.accuracy) ? Math.max(0, Math.min(1, entry.accuracy)) : 0,
-          at: Number.isFinite(entry.at) ? entry.at : 0,
-        };
+        for (const scheme of language === 'zh' && hints !== 'off' ? [null, ...SHUANGPIN_SCHEMES] : [null]) {
+          const key = recordKey(language, duration, hints, corpusVersion, source, { pinyinFormat: scheme ? 'shuangpin' : 'full', pinyinScheme: scheme });
+          const entry = stored[key];
+          if (!entry || !Number.isFinite(entry.speed) || entry.speed < 0) continue;
+          best[key] = {
+            speed: Math.round(entry.speed),
+            accuracy: Number.isFinite(entry.accuracy) ? Math.max(0, Math.min(1, entry.accuracy)) : 0,
+            at: Number.isFinite(entry.at) ? entry.at : 0,
+          };
+        }
       }
       return best;
     }
@@ -343,6 +377,8 @@ return module.exports; })();
       return stored.slice(0, HISTORY_LIMIT).flatMap(item => {
         if (!item || typeof item.id !== 'string' || item.id.length > 100 || !item.id || ids.has(item.id)
           || !LANGUAGES.includes(item.language) || !HINT_MODES.includes(item.hints) || item.language === 'en' && item.hints !== 'off'
+          || item.pinyinFormat != null && !PINYIN_FORMATS.includes(item.pinyinFormat)
+          || item.pinyinFormat === 'shuangpin' && !SHUANGPIN_SCHEMES.includes(item.pinyinScheme)
           || item.rules !== RULES_VERSION || !['timed', 'passage'].includes(item.mode) || !['builtin', 'local'].includes(item.source)
           || !['completed', 'early'].includes(item.status) || !Number.isFinite(item.accuracy) || item.accuracy < 0 || item.accuracy > 1
           || !['at', 'elapsedMs', 'speed', 'correct', 'wrongKeys', 'keystrokes', 'targetLength'].every(key => Number.isSafeInteger(item[key]) && item[key] >= 0)
@@ -356,7 +392,7 @@ return module.exports; })();
               || !new RegExp('^' + item.language + '-[a-z]+-\\d{2}(?:-medium|-long)?$').test(item.passageId)))) return [];
         ids.add(item.id);
         // Whitelist fields: never retain text, chat titles, paths or message IDs.
-        return [{ id: item.id, language: item.language, hints: item.hints, rules: item.rules,
+        return [{ id: item.id, language: item.language, hints: item.hints, ...effectivePinyin(item.language, item.hints, item), rules: item.rules,
           corpusVersion: item.source === 'builtin' ? item.corpusVersion ?? 1 : null,
           length: item.mode === 'passage' && PracticeCorpus.TEXT_LENGTHS.includes(item.length) ? item.length : null,
           passageId: item.mode === 'passage' && item.source === 'builtin' ? item.passageId : null,
@@ -369,15 +405,17 @@ return module.exports; })();
 
     function loadRecords() {
       const current = readStored(RECORDS_KEY);
-      if (current?.version === 3) return { version: 3, best: sanitizeBest(current.best), legacy: sanitizeLegacy(current.legacy), history: sanitizeHistory(current.history) };
+      const previousRecords = current?.version === 4 ? current : readStored(PREVIOUS_RECORDS_KEY);
+      if (previousRecords?.version === 3 || previousRecords?.version === 4) return { version: 4,
+        best: sanitizeBest(previousRecords.best), legacy: sanitizeLegacy(previousRecords.legacy), history: sanitizeHistory(previousRecords.history) };
       const previous = readStored(STORE_KEY);
-      return { version: 3, best: previous?.version === 2 ? sanitizeBest(previous.best) : {}, legacy: sanitizeLegacy(readStored(LEGACY_STORE_KEY)?.best), history: [] };
+      return { version: 4, best: previous?.version === 2 ? sanitizeBest(previous.best) : {}, legacy: sanitizeLegacy(readStored(LEGACY_STORE_KEY)?.best), history: [] };
     }
 
     function saveRecords(records) {
       try {
         // One write makes migration, completion and clearing atomic. Old keys
-        // remain untouched; a valid v3 (including an empty one) is authoritative.
+        // remain untouched; a valid v4 (including an empty one) is authoritative.
         window.localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
         return true;
       } catch { return false; }
@@ -390,7 +428,8 @@ return module.exports; })();
 
     function historyEntry(session) {
       const result = session.result;
-      return { id: session.recordId, language: result.language, hints: result.hints, rules: RULES_VERSION,
+      return { id: session.recordId, language: result.language, hints: result.hints,
+        ...effectivePinyin(result.language, result.hints, result), rules: RULES_VERSION,
         corpusVersion: session.source ? null : PracticeCorpus.CORPUS_VERSION,
         mode: session.mode, source: session.source ? 'local' : 'builtin',
         length: session.mode === 'passage' ? session.length : null, passageId: session.passageId,
@@ -403,7 +442,8 @@ return module.exports; })();
     function samePassageBest(history, entry) {
       if (!passageKey(entry)) return null;
       return history.filter(item => passageKey(item) === passageKey(entry)
-        && item.language === entry.language && item.hints === entry.hints && item.rules === entry.rules)
+        && item.language === entry.language && item.rules === entry.rules
+        && hintIdentity(item.language, item.hints, item) === hintIdentity(entry.language, entry.hints, entry))
         .reduce((best, item) => isBetter(item, best) ? item : best, null);
     }
 
@@ -456,7 +496,11 @@ return module.exports; })();
 
     function loadHintPreference() {
       const saved = readStored(HINT_KEY);
-      return saved?.version === 1 && HINT_MODES.includes(saved.mode) ? saved.mode : 'current';
+      const legacy = readStored(LEGACY_HINT_KEY);
+      const preference = saved?.version === 2 ? saved : legacy?.version === 1 ? legacy : {};
+      return { version: 2, mode: HINT_MODES.includes(preference.mode) ? preference.mode : 'current',
+        pinyinFormat: PINYIN_FORMATS.includes(preference.pinyinFormat) ? preference.pinyinFormat : 'full',
+        pinyinScheme: SHUANGPIN_SCHEMES.includes(preference.pinyinScheme) ? preference.pinyinScheme : 'xiaohe' };
     }
 
     let audioModule;
@@ -476,7 +520,7 @@ return module.exports; })();
     // ---------- session engine ----------
 
     let nextSessionId = 0;
-    function createSession(duration, language = 'en', hints = language === 'en' ? 'off' : 'current', originalText, source = null, exercise = loadExercisePreference(), passageId = null) {
+    function createSession(duration, language = 'en', hints = language === 'en' ? 'off' : 'current', originalText, source = null, exercise = loadExercisePreference(), passageId = null, pronunciation = loadHintPreference()) {
       const mode = exercise.mode;
       const selected = originalText ? { text: originalText, ids: [], passageId }
         : mode === 'passage' ? PracticeCorpus.selectPassage(language, { length: exercise.length, recent: loadRecent().builtin[language] }) : practiceText(language);
@@ -486,6 +530,7 @@ return module.exports; })();
         recordId: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}-${nextSessionId}`,
         language,
         hints,
+        ...effectivePinyin(language, hints, pronunciation),
         source,
         annotations: null,
         annotationState: hints === 'off' ? 'off' : 'loading',
@@ -544,6 +589,7 @@ return module.exports; })();
           speed: Math.round((correct / (session.language === 'en' ? 5 : 1)) / (ms / 60000)),
           language: session.language,
           hints: session.hints,
+          ...effectivePinyin(session.language, session.hints, session),
           eligible: session.mode === 'timed' && ms >= session.duration * 1000,
           accuracy: Math.max(0, Math.min(1, accuracy)),
           correct,
@@ -900,6 +946,7 @@ return module.exports; })();
   user-select: none;
 }
 .tp-ruby rt.tp-reading-hidden { visibility: hidden; }
+.tp-ruby rt.tp-shuangpin { font-family: var(--tp-font-mono); }
 .tp-composition {
   position: fixed;
   z-index: 2;
@@ -1049,11 +1096,20 @@ return module.exports; })();
 .tp-sound-volume output { width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
 .tp-sound-status { display: grid; margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .tp-hint-status[data-empty="true"], .tp-cursor-status[data-empty="true"] { display: none; }
+.tp-pinyin-formats { width: fit-content; max-width: 100%; }
+.tp-pinyin-formats .tp-seg-btn { padding-inline: 10px; }
+.tp-pinyin-controls .tp-sound-field { grid-template-columns: 64px minmax(0, 1fr); gap: 12px; }
+.tp-pinyin-preview { display: flex; justify-content: center; align-items: center; gap: 6px; min-width: 0; font-size: 24px; }
+.tp-pinyin-note { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.7; }
+.tp-sound-field:has(select:disabled) { opacity: .5; }
 .tp-sound-status > span { grid-area: 1 / 1; }
 .tp-sound-credit { font-size: 11px; color: var(--dsw-alias-label-secondary); text-underline-offset: 3px; }
-.tp-cursor-preview { display: flex; justify-content: center; align-items: center; min-height: 60px; margin: 0; border-radius: 8px; background: var(--dsw-alias-bg-layer-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 26px; line-height: 1.25; }
+.tp-cursor-layout, .tp-pinyin-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: stretch; }
+.tp-cursor-controls, .tp-pinyin-controls { display: grid; gap: 12px; min-width: 0; }
+.tp-cursor-controls .tp-sound-field { grid-template-columns: 48px minmax(0, 1fr); gap: 12px; }
+.tp-cursor-preview { display: flex; justify-content: center; align-items: center; min-width: 0; margin: 0; border-radius: 8px; background: var(--dsw-alias-bg-layer-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 26px; line-height: 1.25; }
 .tp-cursor-preview-text { white-space: pre; }
-.tp-cursor-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.tp-cursor-toggles { display: grid; gap: 12px; }
 .tp-cursor-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; font-size: 13px; cursor: pointer; }
 .tp-cursor-toggle input { appearance: none; flex: none; position: relative; width: 36px; height: 22px; margin: 0; border: 1px solid var(--dsw-alias-border-l1); border-radius: 999px; background: var(--dsw-alias-bg-layer-3); cursor: pointer; }
 .tp-cursor-toggle input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-label-primary); transition: transform 150ms ease-out; }
@@ -1099,7 +1155,10 @@ return module.exports; })();
   .tp-settings-content { padding-inline: 14px; }
   .tp-sound-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .tp-sound-picker { align-items: end; }
-  .tp-cursor-toggles { gap: 16px; }
+  .tp-cursor-layout, .tp-pinyin-layout { grid-template-columns: minmax(0, 1fr) minmax(96px, .7fr); gap: 16px; }
+  .tp-cursor-controls .tp-sound-field, .tp-pinyin-controls .tp-sound-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .tp-pinyin-formats { flex-wrap: wrap; }
+  .tp-cursor-preview { font-size: 22px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tp-seg-btn, .tp-timebar-fill { transition: none; }
@@ -1177,7 +1236,10 @@ return module.exports; })();
         if (hints !== 'off' && token && token.reading) {
           const visible = hints === 'all' || (caretIndex >= token.wordStart && caretIndex < token.wordEnd);
           nodes.push(h('ruby', { className: 'tp-ruby', key: i }, character,
-            h('rt', { className: visible ? 'tp-reading' : 'tp-reading tp-reading-hidden', 'aria-hidden': !visible }, token.reading),
+            h('rt', { className: 'tp-reading' + (visible ? '' : ' tp-reading-hidden') + (token.shuangpin ? ' tp-shuangpin' : ''),
+              'aria-hidden': !visible, title: token.readingFallback ? t('pinyinFallback') : undefined,
+              'aria-label': token.readingFallback ? token.reading + ' · ' + t('pinyinFallback') : undefined,
+            }, token.displayReading || token.reading),
           ));
         } else nodes.push(character);
       }
@@ -1469,7 +1531,7 @@ return module.exports; })();
         if (session.hints === 'off') return undefined;
         let cancelled = false;
         const id = session.id;
-        loadAnnotations(session.language, session.text).then(annotations => {
+        loadAnnotations(session.language, session.text, session).then(annotations => {
           if (cancelled || sessionRef.current.id !== id) return;
           updateSession(previous => ({ ...previous, annotations, annotationState: 'ready' }));
         }).catch(() => {
@@ -1527,7 +1589,7 @@ return module.exports; })();
         stopSound();
         const entry = historyEntry(session);
         const previous = recordsRef.current;
-        const key = recordKey(result.language, result.duration, result.hints, entry.corpusVersion, entry.source);
+        const key = recordKey(result.language, result.duration, result.hints, entry.corpusVersion, entry.source, result);
         const current = result.eligible ? previous.best[key] : entry.mode === 'passage' ? samePassageBest(previous.history, entry) : null;
         const better = isBetter(result, current);
         setComparison(result.eligible || entry.mode === 'passage' ? { previous: current || null, mode: entry.mode } : null);
@@ -1560,7 +1622,7 @@ return module.exports; })();
       }, [recordsPassage]);
 
       function clearRecords() {
-        const empty = { version: 3, best: {}, legacy: {}, history: [] };
+        const empty = { version: 4, best: {}, legacy: {}, history: [] };
         if (!saveRecords(empty)) { setClearError(true); return; }
         recordsRef.current = empty; setRecords(empty);
         setSaveError(false); setIsRecord(false); setComparison(null);
@@ -1658,8 +1720,8 @@ return module.exports; })();
         }
       }
 
-      function restart(nextDuration, focus = false, language = session.language, hints = language === 'en' ? 'off' : hintPreference, originalText, source = language === session.language ? session.source : null,
-        exercise = exercisePreference) {
+      function restart(nextDuration, focus = false, language = session.language, hints = language === 'en' ? 'off' : hintPreference.mode, originalText, source = language === session.language ? session.source : null,
+        exercise = exercisePreference, pronunciation = hintPreference) {
         stopSound();
         cancelCorpus();
         const duration = nextDuration || session.duration;
@@ -1668,7 +1730,7 @@ return module.exports; })();
         const preserve = language === session.language && exercise.mode === session.mode && exercise.length === session.length;
         const text = originalText === null ? undefined : originalText || (source || preserve && session.mode === 'passage' ? session.text : undefined);
         const passageId = !source && text === session.text ? session.passageId : null;
-        updateSession(() => createSession(duration, language, hints, text, source, exercise, passageId));
+        updateSession(() => createSession(duration, language, hints, text, source, exercise, passageId, pronunciation));
         if (inputRef.current) inputRef.current.blur();
         compositionRef.current = { active: false, anchor: 0 };
         setComposition({ active: false, text: '' });
@@ -1883,23 +1945,54 @@ return module.exports; })();
             h('p', { className: 'tp-settings-note' }, t('settingsLocalTextNote'))));
       }
 
+      function changeHints(patch) {
+        const current = sessionRef.current;
+        if (current.startAt != null && !current.result || compositionRef.current.active) return;
+        const next = { ...hintPreference, ...patch };
+        if (!HINT_MODES.includes(next.mode) || !PINYIN_FORMATS.includes(next.pinyinFormat) || !SHUANGPIN_SCHEMES.includes(next.pinyinScheme)) return;
+        setHintPreference(next);
+        try { window.localStorage.setItem(HINT_KEY, JSON.stringify(next)); setHintSaveError(false); }
+        catch { setHintSaveError(true); }
+        const hints = current.language === 'en' ? 'off' : next.mode;
+        if (hintIdentity(current.language, hints, next) !== hintIdentity(current.language, current.hints, current)) {
+          restart(current.duration, false, current.language, hints, current.text, current.source, exercisePreference, next);
+        }
+      }
+
       function renderAnnotations() {
+        // Fixed preview stays available in every language without loading the
+        // Mandarin dictionary. Fixtures verify these two syllables per scheme.
+        const isShuangpin = hintPreference.pinyinFormat === 'shuangpin';
+        const preview = !isShuangpin ? ['shuāng', 'pīn'] : hintPreference.pinyinScheme === 'xiaohe' ? ['ul', 'pb'] : ['ud', 'pn'];
         return h('div', { className: 'tp-sound-body' },
-          h('label', { className: 'tp-sound-field' },
-            h('span', null, t('hintDisplay')),
-            h('span', { className: 'tp-select' }, h('select', {
-              value: hintPreference, 'aria-label': t('hintDisplay'), title: session.language === 'en' ? undefined : t('hintChange'),
-              onChange: event => {
-                const hints = event.currentTarget.value;
-                if (!HINT_MODES.includes(hints) || hints === hintPreference && !hintSaveError) return;
-                setHintPreference(hints);
-                try { window.localStorage.setItem(HINT_KEY, JSON.stringify({ version: 1, mode: hints })); setHintSaveError(false); }
-                catch { setHintSaveError(true); }
-                if (session.language !== 'en' && hints !== session.hints) restart(session.duration, false, session.language, hints, session.text);
-              },
-            }, HINT_MODES.map(mode => h('option', { key: mode, value: mode }, t('hint_' + mode)))),
-            h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false },
-              h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
+          h('div', { className: 'tp-pinyin-layout' },
+            h('div', { className: 'tp-pinyin-controls' },
+              h('label', { className: 'tp-sound-field' },
+                h('span', null, t('hintDisplay')),
+                h('span', { className: 'tp-select' }, h('select', {
+                  value: hintPreference.mode, 'aria-label': t('hintDisplay'), title: session.language === 'en' ? undefined : t('hintChange'),
+                  onChange: event => changeHints({ mode: event.currentTarget.value }),
+                }, HINT_MODES.map(mode => h('option', { key: mode, value: mode }, t('hint_' + mode)))),
+                h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false },
+                  h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
+              h('div', { className: 'tp-sound-field' }, h('span', { id: 'tp-pinyin-format-label' }, t('pinyinFormat')),
+                h('div', { className: 'tp-seg tp-pinyin-formats', role: 'group', 'aria-labelledby': 'tp-pinyin-format-label' },
+                  PINYIN_FORMATS.map(format => h('button', { type: 'button', key: format,
+                    className: 'tp-seg-btn' + (hintPreference.pinyinFormat === format ? ' active' : ''),
+                    'aria-pressed': hintPreference.pinyinFormat === format,
+                    onClick: () => changeHints({ pinyinFormat: format }),
+                  }, t('pinyin_' + format))))),
+              h('label', { className: 'tp-sound-field' }, h('span', null, t('shuangpinScheme')),
+                h('span', { className: 'tp-select' }, h('select', {
+                  value: hintPreference.pinyinScheme, disabled: !isShuangpin, 'aria-label': t('shuangpinScheme'),
+                  'aria-describedby': 'tp-pinyin-note', onChange: event => changeHints({ pinyinScheme: event.currentTarget.value }),
+                }, SHUANGPIN_SCHEMES.map(scheme => h('option', { key: scheme, value: scheme }, t('scheme_' + scheme)))),
+                h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false },
+                  h('path', { d: 'M3 4.5 6 7.5 9 4.5' }))))),
+            h('div', { className: 'tp-pinyin-preview', role: 'img', 'aria-label': t('pinyinPreview') + ': 双拼 · ' + preview.join(' ') },
+              ['双', '拼'].map((char, i) => h('ruby', { className: 'tp-ruby', key: char, 'aria-hidden': true }, char,
+                h('rt', { className: isShuangpin ? 'tp-shuangpin' : undefined }, preview[i]))))),
+          h('p', { className: 'tp-pinyin-note', id: 'tp-pinyin-note' }, t('pinyinNote')),
           h('div', { className: 'tp-sound-status tp-hint-status', 'data-empty': !hintSaveError },
             h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('hintSaveError')),
             h('span', { role: 'status' }, hintSaveError ? t('hintSaveError') : '')));
@@ -1915,15 +2008,17 @@ return module.exports; })();
 
       function renderCursor() {
         return h('div', { className: 'tp-sound-body' },
-            h('div', { className: 'tp-cursor-preview', role: 'img', 'aria-label': t('cursorPreview') },
-              h('span', { className: 'tp-cursor-preview-text', 'aria-hidden': true }, 'Aa ', h('span', { className: 'tp-char caret' }, '中'), '文')),
-            h('label', { className: 'tp-sound-field' }, h('span', null, t('cursorShape')),
-              h('span', { className: 'tp-select' }, h('select', { value: cursorPreference.shape, 'aria-label': t('cursorShape'), onChange: event => changeCursor({ shape: event.currentTarget.value }) },
-                CURSOR_SHAPES.map(shape => h('option', { key: shape, value: shape }, t('cursor_' + shape)))),
-                h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false }, h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
-            h('div', { className: 'tp-cursor-toggles' }, ['glow', 'blink'].map(option => h('label', { className: 'tp-cursor-toggle', key: option },
-              h('span', null, t(option === 'glow' ? 'cursorGlow' : 'cursorBlink')),
-              h('input', { type: 'checkbox', role: 'switch', checked: cursorPreference[option], onChange: event => changeCursor({ [option]: event.currentTarget.checked }) })))),
+            h('div', { className: 'tp-cursor-layout' },
+              h('div', { className: 'tp-cursor-controls' },
+                h('label', { className: 'tp-sound-field' }, h('span', null, t('cursorShape')),
+                  h('span', { className: 'tp-select' }, h('select', { value: cursorPreference.shape, 'aria-label': t('cursorShape'), onChange: event => changeCursor({ shape: event.currentTarget.value }) },
+                    CURSOR_SHAPES.map(shape => h('option', { key: shape, value: shape }, t('cursor_' + shape)))),
+                    h('svg', { className: 'tp-select-chevron', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false }, h('path', { d: 'M3 4.5 6 7.5 9 4.5' })))),
+                h('div', { className: 'tp-cursor-toggles' }, ['glow', 'blink'].map(option => h('label', { className: 'tp-cursor-toggle', key: option },
+                  h('span', null, t(option === 'glow' ? 'cursorGlow' : 'cursorBlink')),
+                  h('input', { type: 'checkbox', role: 'switch', checked: cursorPreference[option], onChange: event => changeCursor({ [option]: event.currentTarget.checked }) }))))),
+              h('div', { className: 'tp-cursor-preview', role: 'img', 'aria-label': t('cursorPreview') },
+                h('span', { className: 'tp-cursor-preview-text', 'aria-hidden': true }, 'Aa ', h('span', { className: 'tp-char caret' }, '中'), '文'))),
             h('div', { className: 'tp-sound-status tp-cursor-status', 'data-empty': !cursorSaveError },
               h('span', { className: 'tp-status-size', 'aria-hidden': true }, t('cursorSaveError')),
               h('span', { role: 'status' }, cursorSaveError ? t('cursorSaveError') : '')));
@@ -2003,7 +2098,7 @@ return module.exports; })();
                   h('p', { className: 'tp-record-title' }, t('language_' + item.language) + ' · ' + t(item.source === 'local' ? 'corpusLocal' : item.corpusVersion === 1 ? 'recordsOldCorpus' : 'corpusBuiltin')),
                   h('p', { className: 'tp-record-meta' },
                     (item.mode === 'timed' ? t('recordsTimed', { n: item.duration }) : t('corpusCount', { n: item.targetLength }))
-                    + (item.length ? ' · ' + t('length_' + item.length) : '') + ' · ' + t('recordsHints', { mode: t('hint_' + item.hints) }) + ' · ' + t(item.status === 'early' ? 'recordsEarly' : 'recordsCompleted')),
+                    + (item.length ? ' · ' + t('length_' + item.length) : '') + ' · ' + t('recordsHints', { mode: hintDescription(item.language, item.hints, item) }) + ' · ' + t(item.status === 'early' ? 'recordsEarly' : 'recordsCompleted')),
                   h('p', { className: 'tp-record-detail' }, t('recordsDetails', { seconds: (item.elapsedMs / 1000).toFixed(1), correct: item.correct, errors: item.wrongKeys })),
                   h('p', { className: 'tp-record-meta' }, formatRecordDate(item.at)),
                   passageKey(item) && !recordsPassage ? h('button', { type: 'button', className: 'tp-record-link', onClick: () => setRecordsPassage(passageKey(item)) }, t('recordsSame')) : null,
@@ -2011,10 +2106,12 @@ return module.exports; })();
               ))) : h('p', { className: 'tp-records-empty' }, t('recordsEmpty')),
             ) : h('div', null,
               bestRows.length ? h('ul', { className: 'tp-record-list' }, bestRows.map(([key, item]) => {
-                const [language, duration, source, hints] = key.split(':');
+                const [language, duration, source, hintId] = key.split(':');
+                const [hints, scheme] = hintId.split('~');
                 return h('li', { className: 'tp-record-row', key }, h('div', null,
                   h('p', { className: 'tp-record-title' }, t('language_' + language) + ' · ' + t('recordsTimed', { n: duration }) + ' · ' + t(source === 'local' ? 'corpusLocal' : 'corpusBuiltin')),
-                  h('p', { className: 'tp-record-meta' }, t('recordsHints', { mode: t('hint_' + (hints === 'plain' ? 'off' : hints)) }) + (source === 'local' || key.endsWith(':corpus' + PracticeCorpus.CORPUS_VERSION) ? '' : ' · ' + t('recordsOldCorpus'))),
+                  h('p', { className: 'tp-record-meta' }, t('recordsHints', { mode: hintDescription(language, hints === 'plain' ? 'off' : hints,
+                    { pinyinFormat: scheme ? 'shuangpin' : 'full', pinyinScheme: scheme }) }) + (source === 'local' || key.endsWith(':corpus' + PracticeCorpus.CORPUS_VERSION) ? '' : ' · ' + t('recordsOldCorpus'))),
                   h('p', { className: 'tp-record-meta' }, formatRecordDate(item.at))), renderRecordScore(item.speed, item.accuracy, language));
               })) : h('p', { className: 'tp-records-empty' }, t('recordsBestEmpty')),
               legacyRows.length ? h('div', null, h('h3', { className: 'tp-records-legacy' }, t('recordsLegacy')),
@@ -2039,7 +2136,7 @@ return module.exports; })();
       const shownAccuracy = Math.round((result ? result.accuracy : stats.accuracy) * 100);
       const remaining = Math.max(0, Math.ceil((session.duration * 1000 - stats.ms) / 1000));
       const progress = Math.max(0, Math.min(1, session.mode === 'passage' ? characters(session.typed).length / session.target.length : stats.ms / (session.duration * 1000)));
-      const bestForDuration = best[recordKey(session.language, session.duration, session.hints, PracticeCorpus.CORPUS_VERSION, session.source ? 'local' : 'builtin')] || null;
+      const bestForDuration = best[recordKey(session.language, session.duration, session.hints, PracticeCorpus.CORPUS_VERSION, session.source ? 'local' : 'builtin', session)] || null;
       const legacy = !isIme && !session.source && legacyBest[session.duration];
       const isPassage = session.mode === 'passage';
       const running = session.startAt != null && !result || composition.active;

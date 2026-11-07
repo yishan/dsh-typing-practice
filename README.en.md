@@ -38,6 +38,8 @@ Choose a language and practice mode at the bottom of the page: `English / Chines
 
 Pinyin and Jyutping dictionaries are bundled with the plugin and loaded locally, without a remote pronunciation service. If loading fails, retry or turn hints off to continue.
 
+In **Settings → Pronunciation**, choose how many hints to show and whether Chinese hints use full Pinyin or Shuangpin. Full Pinyin is the default. Shuangpin offers Xiaohe, Ziranma, Microsoft and Sogou layouts; choose the one used by your input method. Preferences are saved locally and applied when you switch to Chinese. Cantonese continues to use Jyutping.
+
 ### Local conversation passages
 
 Select **Local conversations** at the bottom of the page to find text for the selected English, Chinese or Cantonese mode. Click **New passage** to select another excerpt. The plugin remembers your text source; the initial source is **Built-in text**. If no suitable local content is available, it switches back to built-in text automatically.
