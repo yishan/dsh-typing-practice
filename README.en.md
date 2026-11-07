@@ -34,7 +34,7 @@ The built-in collection contains **288 passages: 96 per language, with 32 short,
 | Medium | 80–139 | 160–279 | 32 |
 | Long | 140–220 | 280–440 | 32 |
 
-Choose a language and practice mode at the bottom of the page: `English / Chinese / Cantonese | 15s / 30s / 60s | Short / Medium / Long`. Select one language and one practice mode.
+Choose a language and practice mode at the bottom of the page: `English / Chinese / Cantonese | 15s / 30s / 60s | Short / Medium / Long`. Select one language and one practice mode. The initial practice language matches the DSH interface language.
 
 Pinyin and Jyutping dictionaries are bundled with the plugin and loaded locally, without a remote pronunciation service. If loading fails, retry or turn hints off to continue.
 

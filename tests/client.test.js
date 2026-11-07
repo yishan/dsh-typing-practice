@@ -13,7 +13,7 @@ const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
 
 // Run the shipped plugin and its component handlers with controlled hooks and
 // clock. This does not emulate DOM focus, layout, or the DSH module loader.
-function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = async () => ({
+function mountDefaultClient(locale, initialStorage = {}, failSave = false, loadChunk = async () => ({
   annotate: text => Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part, i) => ({
     char: part.segment, reading: 'hint', wordStart: i, wordEnd: i + 1,
   })),
@@ -245,6 +245,7 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
       render();
       if (label !== '英文' && hints !== null) setHints(hints);
     },
+    english() { find(node => node.type === 'button' && node.props['aria-describedby'] === 'tp-language-shortcut' && ['英文', 'English'].includes(node.children[0])).props.onClick(); render(); },
     selectedLanguage: () => find(node => node.type === 'button' && node.props['aria-describedby'] === 'tp-language-shortcut' && node.props['aria-pressed']).children[0],
     hints: setHints,
     mode(value) {
@@ -354,6 +355,14 @@ function mountClient(locale, initialStorage = {}, failSave = false, loadChunk = 
   };
 }
 
+// Timing, scoring and local-corpus fixtures below explicitly select English.
+// Default-entry tests use mountDefaultClient to exercise the shipped initial state.
+function mountClient(...args) {
+  const app = mountDefaultClient(...args);
+  app.english();
+  return app;
+}
+
 for (const duration of [15, 30, 60]) {
   test(`${duration}s: input before the deadline counts; input at the deadline does not`, () => {
     const app = mountClient();
@@ -456,6 +465,51 @@ function fallbackLocale(snapshot, binding = 'missing') {
     change(next) { snapshot = next; for (const listener of listeners) listener(); },
   };
 }
+
+test('the initial practice language follows DSH and Chinese starts with full Pinyin on the current character', async () => {
+  for (const [active, label, language] of [['zh', '中文', 'zh'], ['zh-CN', '中文', 'zh'], ['en', 'English', 'en'], ['en-US', 'English', 'en']]) {
+    const calls = [];
+    const app = mountDefaultClient(fallbackLocale({ active }), {}, false, async name => {
+      calls.push(name); return pinyinEngine;
+    });
+    assert.equal(app.selectedLanguage(), label);
+    assert.equal(app.board().hints, language === 'zh' ? 'current' : 'off');
+    assert.ok(entries.some(entry => entry.language === language && app.board().text.startsWith(entry.text)));
+    await app.settle();
+    assert.deepEqual(calls, language === 'zh' ? ['./client.pinyin.js'] : []);
+    assert.equal(app.readOnly(), false);
+    assert.equal(app.activeTimers(), 0);
+    if (language === 'zh') {
+      assert.ok(app.board().annotations.every(token => !token.shuangpin));
+      app.openSettings();
+      assert.equal(app.hintControl().value, 'current');
+      assert.equal(app.pinyinControl().disabled, true);
+      assert.match(app.pinyinPreview(), /shuāng pīn/);
+    }
+  }
+  const app = mountDefaultClient(fallbackLocale({ active: 'zh' }), {
+    'dsh.typing-practice.annotations.v2': JSON.stringify({ version: 2, mode: 'all', pinyinFormat: 'shuangpin', pinyinScheme: 'xiaohe' }),
+  }, false, async () => pinyinEngine);
+  await app.settle();
+  assert.equal(app.board().hints, 'all');
+  assert.ok(app.board().annotations.some(token => token.shuangpin), 'saved pronunciation preferences still apply on opening');
+});
+
+test('current-character hints reveal one character at the caret, even within a multi-character word', async () => {
+  for (const language of ['中文', '粤语']) {
+    const app = mountDefaultClient(undefined, {}, false, async () => ({
+      annotate: text => pinyinEngine.annotate(text).map(token => ({ ...token, wordStart: 0, wordEnd: Array.from(text).length })),
+    }));
+    if (language === '粤语') app.language(language, null);
+    await app.settle();
+    const visible = () => app.renderedReadings().flatMap((node, index) => node.props['aria-hidden'] ? [] : [index]);
+    assert.deepEqual(visible(), [0]);
+    app.input(app.board().text[0], 1000);
+    assert.deepEqual(visible(), [1]);
+    app.restart(); app.hints('all'); await app.settle();
+    assert.ok(visible().length > 1);
+  }
+});
 
 for (const binding of ['missing', 'unavailable', 'throws']) {
   test(`English active locale selects English fallback when binding is ${binding}`, () => {
@@ -673,12 +727,9 @@ test('storage failure is reported without losing the current result', () => {
 
 const annotationEngine = marker => ({ annotate: text => Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part, i) => ({ char: part.segment, reading: marker, wordStart: i, wordEnd: i + 1 })) });
 
-test('pronunciation loads lazily by language and reuses its engine', async () => {
+test('default Chinese loads only its pronunciation engine and reuses it across restarts', async () => {
   const calls = [];
-  const app = mountClient(undefined, {}, false, async name => { calls.push(name); return annotationEngine(name); });
-  await app.settle();
-  assert.deepEqual(calls, []);
-  app.language('中文', 'current');
+  const app = mountDefaultClient(undefined, {}, false, async name => { calls.push(name); return annotationEngine(name); });
   assert.equal(app.readOnly(), true);
   app.input('你', 1000);
   assert.equal(app.board().typed, '');
@@ -900,7 +951,7 @@ test('source preference survives remount without persisting conversation text or
   await app.usePassage('Private passage content.');
   const stored = app.rawStorage(preferenceKey);
   assert.deepEqual(JSON.parse(stored), { version: 1, source: 'local' });
-  const restored = mountClient(undefined, { [preferenceKey]: stored });
+  const restored = mountDefaultClient(undefined, { [preferenceKey]: stored });
   assert.equal(restored.sourceSelected('本地对话语料'), true);
   await restored.settle();
   assert.equal(restored.requests.length, 1);
@@ -1701,6 +1752,8 @@ test('all hint modes persist from English settings and apply to Chinese and Cant
   for (const mode of ['off', 'current', 'all']) {
     const calls = [];
     const app = mountClient(undefined, {}, false, async name => { calls.push(name); return annotationEngine('ready'); });
+    await app.settle();
+    const initialLoads = [...calls];
     const text = app.board().text;
     app.input(text[0], 1000); app.tick(31000);
     app.hints('off'); app.hints(mode);
@@ -1708,7 +1761,7 @@ test('all hint modes persist from English settings and apply to Chinese and Cant
     assert.equal(app.board().hints, 'off');
     assert.equal(app.board().text, text);
     assert.equal(app.finished(), true, 'changing the shared setting must not reset an English result');
-    assert.deepEqual(calls, [], 'English preferences must not load a pronunciation engine');
+    assert.deepEqual(calls, initialLoads, 'English preferences must not trigger another pronunciation load');
     const stored = app.rawStorage('dsh.typing-practice.annotations.v2');
     assert.deepEqual(JSON.parse(stored), { version: 2, mode, pinyinFormat: 'full', pinyinScheme: 'xiaohe' });
     const restored = mountClient(undefined, { 'dsh.typing-practice.annotations.v2': stored });
@@ -1756,9 +1809,11 @@ test('the privacy note stays beside the subtitle for every language and corpus s
 const realPronunciation = async name => name === './client.pinyin.js' ? pinyinEngine : jyutpingEngine;
 const hintStorageKey = 'dsh.typing-practice.annotations.v2';
 
-test('Shuangpin can be preset in English without loading Mandarin or resetting a finished run', async () => {
+test('Shuangpin can be preset in English without reloading Mandarin or resetting a finished run', async () => {
   const calls = [];
   const app = mountClient(undefined, {}, false, async name => { calls.push(name); return realPronunciation(name); });
+  await app.settle();
+  const initialLoads = [...calls];
   app.input(app.board().text[0], 1000); app.tick(31000);
   const text = app.board().text;
   app.openSettings();
@@ -1776,7 +1831,7 @@ test('Shuangpin can be preset in English without loading Mandarin or resetting a
   app.closeSound(); await app.settle();
   assert.equal(app.finished(), true);
   assert.equal(app.board().text, text);
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, initialLoads);
   const preference = app.rawStorage(hintStorageKey);
   assert.deepEqual(JSON.parse(preference), { version: 2, mode: 'current', pinyinFormat: 'shuangpin', pinyinScheme: 'sogou' });
   const restored = mountClient(undefined, { [hintStorageKey]: preference }, false, realPronunciation);
@@ -1826,7 +1881,7 @@ test('Cantonese retains Jyutping and its finished result when Mandarin preferenc
   app.openSettings(); app.pinyinFormat('shuangpin'); app.pinyinScheme('microsoft'); app.closeSound(); await app.settle();
   assert.equal(app.board().annotations, before);
   assert.equal(app.finished(), true);
-  assert.deepEqual(calls, ['./client.jyutping.js']);
+  assert.deepEqual(calls, ['./client.pinyin.js', './client.jyutping.js']);
   assert.equal(app.records().history[0].pinyinScheme, null);
   app.language('中文', null); await app.settle();
   assert.ok(app.board().annotations.some(t => t.shuangpin));

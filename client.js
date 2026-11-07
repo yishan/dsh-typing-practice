@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
       hint_zh: '拼音',
       hint_yue: '粤拼',
       hint_off: '关闭',
-      hint_current: '当前词',
+      hint_current: '当前字符',
       hint_all: '全部',
       hintChange: '更改提示会开始新一轮',
       hintLoading: '正在准备注音…',
@@ -98,7 +98,7 @@ window.__ModuleLoader__.load({
       corpusEmpty: '本次未找到合适的近期语料，已使用默认语料。',
       corpusUnavailable: '本地对话暂不可用，已使用默认语料。',
       corpusPassage: '完成一段', corpusElapsed: '用时', corpusCompleted: '已完成 · {seconds} 秒',
-      corpusCount: '{n} 字符', corpusFooter: '练习记录仅存本机，不额外保存对话原文。',
+      corpusCount: '{n} 字符', corpusFooter: '练习记录仅存本机，不保存语料信息。',
       records: '记录', recordsTitle: '练习记录', recordsClose: '关闭记录',
       recordsRunning: '完成或重新开始后可查看记录', recordsRecent: '最近练习', recordsBest: '限时最佳',
       recordsAll: '全部语言', recordsLanguage: '记录语言', recordsEmpty: '完成一轮练习后，成绩会出现在这里。',
@@ -149,7 +149,7 @@ window.__ModuleLoader__.load({
       hint_zh: 'Pinyin',
       hint_yue: 'Jyutping',
       hint_off: 'Off',
-      hint_current: 'Current word',
+      hint_current: 'Current character',
       hint_all: 'All',
       hintChange: 'Changing hints starts a new run',
       hintLoading: 'Preparing pronunciation…',
@@ -188,7 +188,7 @@ window.__ModuleLoader__.load({
       corpusEmpty: 'No suitable recent text found. Using built-in text.',
       corpusUnavailable: 'Local history is unavailable. Using built-in text.',
       corpusPassage: 'Complete a passage', corpusElapsed: 'Elapsed', corpusCompleted: 'Completed · {seconds}s',
-      corpusCount: '{n} characters', corpusFooter: 'Practice records stay on this device. No extra copy of your conversations is saved.',
+      corpusCount: '{n} characters', corpusFooter: 'Practice records stay on this device. Practice passage information is not saved.',
       records: 'Records', recordsTitle: 'Practice records', recordsClose: 'Close records',
       recordsRunning: 'Finish or restart this run to view records', recordsRecent: 'Recent practice', recordsBest: 'Timed bests',
       recordsAll: 'All languages', recordsLanguage: 'Record language', recordsEmpty: 'Complete a practice run to see your results here.',
@@ -1230,7 +1230,7 @@ return module.exports; })();
         const character = h('span', { className, key: i, 'data-input-anchor': i === caretIndex ? '' : undefined }, ch);
         const token = annotations && annotations[i];
         if (hints !== 'off' && token && token.reading) {
-          const visible = hints === 'all' || (caretIndex >= token.wordStart && caretIndex < token.wordEnd);
+          const visible = hints === 'all' || i === caretIndex;
           nodes.push(h('ruby', { className: 'tp-ruby', key: i }, character,
             h('rt', { className: 'tp-reading' + (visible ? '' : ' tp-reading-hidden') + (token.shuangpin ? ' tp-shuangpin' : ''),
               'aria-hidden': !visible, title: token.readingFallback ? t('pinyinFallback') : undefined,
@@ -1316,7 +1316,8 @@ return module.exports; })();
 
     function TypingPage() {
       useLocaleVersion();
-      const [session, setSession] = React.useState(() => createSession(loadExercisePreference().duration));
+      const [session, setSession] = React.useState(() => createSession(loadExercisePreference().duration, activeLanguage,
+        activeLanguage === 'en' ? 'off' : loadHintPreference().mode));
       React.useEffect(() => { rememberSession(session); }, [session.id]);
       const [records, setRecords] = React.useState(loadRecords);
       const best = records.best;
