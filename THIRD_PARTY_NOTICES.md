@@ -1,10 +1,8 @@
 # Third-party notices
 
-Pronunciation engines are bundled locally in their respective Client chunks. The Host bundles mdast-util-from-markdown and its runtime dependencies to parse selected conversation text. All bundled package licenses are included below. Built-in practice passages are authored in this project.
+Type Feel is MIT licensed. Practice passages are original. Libraries and keyboard recordings are bundled with the application; no runtime CDN is used.
 
 ## character-entities 2.0.2
-
-wooorm/character-entities
 
 (The MIT License)
 
@@ -32,8 +30,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## decode-named-character-reference 1.3.0
 
-wooorm/decode-named-character-reference
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -59,8 +55,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## mdast-util-from-markdown 2.0.2
-
-syntax-tree/mdast-util-from-markdown
 
 (The MIT License)
 
@@ -88,8 +82,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## mdast-util-to-string 4.0.0
 
-syntax-tree/mdast-util-to-string
-
 (The MIT License)
 
 Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>
@@ -115,8 +107,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark 4.0.3
-
-https://github.com/micromark/micromark/tree/main/packages/micromark
 
 (The MIT License)
 
@@ -144,8 +134,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-core-commonmark 2.0.4
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-core-commonmark
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -171,8 +159,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-factory-destination 2.0.1
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-factory-destination
 
 (The MIT License)
 
@@ -200,8 +186,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-factory-label 2.0.1
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-factory-label
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -227,8 +211,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-factory-space 2.1.0
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-factory-space
 
 (The MIT License)
 
@@ -256,8 +238,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-factory-title 2.0.1
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-factory-title
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -283,8 +263,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-factory-whitespace 2.0.1
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-factory-whitespace
 
 (The MIT License)
 
@@ -312,8 +290,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-util-character 2.1.1
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-character
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -339,8 +315,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-util-chunked 2.0.1
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-chunked
 
 (The MIT License)
 
@@ -368,8 +342,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-util-classify-character 2.0.1
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-classify-character
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -395,8 +367,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-util-combine-extensions 2.0.1
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-combine-extensions
 
 (The MIT License)
 
@@ -424,8 +394,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-util-decode-numeric-character-reference 2.0.2
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-numeric-character-reference
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -451,8 +419,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-util-decode-string 2.0.1
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-string
 
 (The MIT License)
 
@@ -480,8 +446,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-util-edit-map 1.0.0
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-edit-map
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -507,8 +471,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-util-encode 2.0.1
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-encode
 
 (The MIT License)
 
@@ -536,8 +498,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-util-html-tag-name 2.0.1
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-html-tag-name
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -563,8 +523,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-util-normalize-identifier 2.0.1
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-normalize-identifier
 
 (The MIT License)
 
@@ -592,8 +550,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-util-resolve-all 2.0.1
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-resolve-all
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -619,8 +575,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ## micromark-util-sanitize-uri 2.0.1
-
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-sanitize-uri
 
 (The MIT License)
 
@@ -648,8 +602,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## micromark-util-subtokenize 2.1.0
 
-https://github.com/micromark/micromark/tree/main/packages/micromark-util-subtokenize
-
 (The MIT License)
 
 Copyright (c) Titus Wormer <tituswormer@gmail.com>
@@ -676,8 +628,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## pinyin-pro 3.29.5
 
-git+https://github.com/zh-lx/pinyin-pro.git
-
 MIT License
 
 Copyright (c) 2022-present zh-lx
@@ -701,9 +651,82 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-## to-jyutping 3.1.1
+## react 19.3.1
 
-git+https://github.com/CanCLID/to-jyutping.git
+MIT License
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+## react-dom 19.3.1
+
+MIT License
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+## scheduler 0.28.0
+
+MIT License
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+## to-jyutping 3.1.1
 
 BSD 2-Clause License
 
@@ -734,8 +757,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## unist-util-stringify-position 4.0.0
 
-syntax-tree/unist-util-stringify-position
-
 (The MIT License)
 
 Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>
@@ -764,8 +785,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 https://github.com/tplai/kbsim/tree/ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4/src/assets/audio
 
-Cherry MX Blue, Cherry MX Brown, NovelKeys Cream and Holy Panda press samples are bundled unchanged in client.audio.js. Five general-key variations are included for each pack; dedicated space, backspace and enter samples are used where the upstream pack provides them. The audio is licensed under the upstream MIT license below. Product names identify the recordings, without implying affiliation.
-
 Copyright (c) Thomas Lai
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -773,3 +792,4 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
