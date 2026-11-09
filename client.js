@@ -2384,7 +2384,7 @@ function selectPractice(language, recent = [], minChars = 1200, random = Math.ra
 var zh = {
   panelLabel: "打字练习",
   panelTitle: "打字练习",
-  panelSubtitle: "实时统计速度与准确率，",
+  panelSubtitle: "实时统计打字速度与准确率",
   bestValue: "最佳 {speed} {unit} · {acc}%",
   legacyBestValue: "旧版最佳 {speed} WPM · {acc}%",
   bestNone: "暂无最佳记录",
@@ -2446,7 +2446,7 @@ var zh = {
   corpusElapsed: "用时",
   corpusCompleted: "已完成 · {seconds} 秒",
   corpusCount: "{n} 字符",
-  corpusFooter: "练习记录仅存本机，不保存语料信息。",
+  corpusFooter: "",
   records: "记录",
   recordsTitle: "练习记录",
   recordsClose: "关闭记录",
@@ -2674,6 +2674,11 @@ var en = {
   cursorSaveError: "Cursor settings could not be saved. You may need to choose again next time."
 };
 var dictionaries = { zh, en };
+
+// packages/practice/src/cursor-style.js
+var CURSOR_GLOW = `box-shadow: 0 0 5px color-mix(in srgb, var(--tp-cursor-color) 50%, transparent),
+  -6px 0 12px 2px color-mix(in srgb, var(--tp-cursor-color) 22%, transparent),
+  6px 0 12px 2px color-mix(in srgb, var(--tp-cursor-color) 22%, transparent);`;
 
 // packages/practice/src/styles.js
 var CSS = `
@@ -2936,9 +2941,7 @@ var CSS = `
   left: -1px; width: calc(100% + 2px); min-width: .6em; background: transparent; border: 2px solid var(--tp-cursor-color); border-radius: 3px;
 }
 .tp-root[data-cursor-glow="true"] .tp-char.caret::before {
-  box-shadow: 0 0 5px color-mix(in srgb, var(--tp-cursor-color) 50%, transparent),
-    -6px 0 12px 2px color-mix(in srgb, var(--tp-cursor-color) 22%, transparent),
-    6px 0 12px 2px color-mix(in srgb, var(--tp-cursor-color) 22%, transparent);
+  ${CURSOR_GLOW}
 }
 @keyframes tp-cursor-blink { 0%, 45%, 100% { opacity: 1; } 65%, 85% { opacity: .2; } }
 .tp-root[data-cursor-blink="true"] .tp-char.caret::before { animation: tp-cursor-blink 1.2s ease-in-out infinite; }
@@ -3203,6 +3206,91 @@ var CSS = `
 }
 `;
 
+// packages/practice/src/native-input.js
+var segmenter = new Intl.Segmenter(void 0, { granularity: "grapheme" });
+function characters(text) {
+  return Array.from(segmenter.segment(text), (part) => part.segment);
+}
+function textEdit(previous, value, limit = Infinity) {
+  const before = characters(previous);
+  const after = characters(value).slice(0, limit);
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) start++;
+  let oldEnd = before.length;
+  let newEnd = after.length;
+  while (oldEnd > start && newEnd > start && before[oldEnd - 1] === after[newEnd - 1]) {
+    oldEnd--;
+    newEnd--;
+  }
+  return { before, after, start, oldEnd, newEnd, inserted: after.slice(start, newEnd), changed: start !== oldEnd || start !== newEnd };
+}
+function createCommittedBuffer(commit) {
+  let value = "";
+  let composing = false;
+  let trailing = null;
+  function accept(element) {
+    const source = element.value;
+    if (!textEdit(value, source).changed) return;
+    value = commit(source);
+    if (element.value !== value) element.value = value;
+    return { source, value };
+  }
+  return {
+    get composing() {
+      return composing;
+    },
+    begin() {
+      composing = true;
+      trailing = null;
+    },
+    end(element) {
+      if (!composing) return;
+      composing = false;
+      trailing = accept(element) || null;
+    },
+    flush(element) {
+      if (composing) return;
+      value = commit(element.value);
+      element.value = value;
+      trailing = null;
+    },
+    input(element, event = {}) {
+      if (composing || event.isComposing) {
+        composing = true;
+        return;
+      }
+      if (["insertFromPaste", "insertFromDrop", "insertFromYank"].includes(event.inputType)) {
+        element.value = value;
+        return;
+      }
+      if (trailing && /Composition/.test(event.inputType || "") && element.value === trailing.source) {
+        element.value = value;
+        trailing = null;
+        return;
+      }
+      trailing = null;
+      accept(element);
+    }
+  };
+}
+
+// packages/practice/src/keyboard-sound.js
+var SOUND_PACKS = ["off", "mxblue", "mxbrown", "cream", "holypanda"];
+function soundPreference(saved) {
+  return {
+    version: 1,
+    pack: saved?.version === 1 && SOUND_PACKS.includes(saved.pack) ? saved.pack : "off",
+    volume: saved?.version === 1 && Number.isFinite(saved.volume) ? Math.max(0, Math.min(100, Math.round(saved.volume))) : 30
+  };
+}
+function keySoundKind(event, input = event, activeComposition = false) {
+  if (event.repeat || input.repeat || event.ctrlKey || event.metaKey || event.altKey) return null;
+  const key = event.key;
+  const composing = activeComposition || input.isComposing || event.isComposing || input.keyCode === 229;
+  if (!(key?.length === 1 || ["Backspace", "Delete", "Process", "Unidentified"].includes(key) || key === "Enter" && composing)) return null;
+  return key === " " || input.code === "Space" ? "space" : key === "Backspace" || key === "Delete" ? "backspace" : key === "Enter" ? "enter" : "generic";
+}
+
 // packages/practice/src/create-practice.js
 function createPractice(React, platform) {
   const h = React.createElement;
@@ -3218,7 +3306,6 @@ function createPractice(React, platform) {
   const EXERCISE_KEY = `${storagePrefix}.exercise.v2`;
   const LEGACY_EXERCISE_KEY = `${storagePrefix}.exercise.v1`;
   const SOUND_KEY = `${storagePrefix}.sound.v1`;
-  const SOUND_PACKS = ["off", "mxblue", "mxbrown", "cream", "holypanda"];
   const CURSOR_KEY = `${storagePrefix}.cursor.v1`;
   const CURSOR_SHAPES = ["line", "underline", "outline"];
   const LANGUAGES = ["en", "zh", "yue"];
@@ -3227,7 +3314,7 @@ function createPractice(React, platform) {
   const HINT_KEY = `${storagePrefix}.annotations.v2`;
   const PINYIN_FORMATS = ["full", "shuangpin"];
   const SHUANGPIN_SCHEMES = ["xiaohe", "ziranma", "microsoft", "sogou"];
-  const RULES_VERSION = 2;
+  const RULES_VERSION2 = 2;
   const DURATIONS = [15, 30, 60];
   const OPTION_SHORTCUTS = [
     { id: "language", key: "T", label: "languageLabel" },
@@ -3262,10 +3349,6 @@ function createPractice(React, platform) {
     } catch {
     }
     return "zh";
-  }
-  const segmenter = new Intl.Segmenter(void 0, { granularity: "grapheme" });
-  function characters(text) {
-    return Array.from(segmenter.segment(text), (part) => part.segment);
   }
   const RECENT_KEY = `${storagePrefix}.recent.v1`;
   let recentMemory;
@@ -3333,7 +3416,7 @@ function createPractice(React, platform) {
     return range + " · " + t(effective.pinyinScheme ? "scheme_" + effective.pinyinScheme : "pinyin_full");
   }
   function recordKey(language, duration, hints = "off", corpusVersion = CORPUS_VERSION, source = "builtin", pronunciation) {
-    return `${language}:${duration}:${source}:${hintIdentity(language, hints, pronunciation)}:${RULES_VERSION}${source === "local" || corpusVersion === 1 ? "" : ":corpus" + corpusVersion}`;
+    return `${language}:${duration}:${source}:${hintIdentity(language, hints, pronunciation)}:${RULES_VERSION2}${source === "local" || corpusVersion === 1 ? "" : ":corpus" + corpusVersion}`;
   }
   function sanitizeBest(stored) {
     if (!stored || typeof stored !== "object") return {};
@@ -3372,7 +3455,7 @@ function createPractice(React, platform) {
     if (!Array.isArray(stored)) return [];
     const ids = /* @__PURE__ */ new Set();
     return stored.slice(0, HISTORY_LIMIT).flatMap((item) => {
-      if (!item || typeof item.id !== "string" || item.id.length > 100 || !item.id || ids.has(item.id) || !LANGUAGES.includes(item.language) || !HINT_MODES.includes(item.hints) || item.language === "en" && item.hints !== "off" || item.pinyinFormat != null && !PINYIN_FORMATS.includes(item.pinyinFormat) || item.pinyinFormat === "shuangpin" && !SHUANGPIN_SCHEMES.includes(item.pinyinScheme) || item.rules !== RULES_VERSION || !["timed", "passage"].includes(item.mode) || !["builtin", "local"].includes(item.source) || !["completed", "early"].includes(item.status) || !Number.isFinite(item.accuracy) || item.accuracy < 0 || item.accuracy > 1 || !["at", "elapsedMs", "speed", "correct", "wrongKeys", "keystrokes", "targetLength"].every((key) => Number.isSafeInteger(item[key]) && item[key] >= 0) || item.at > 864e13 || item.elapsedMs < 1 || item.targetLength < 1 || item.wrongKeys > item.keystrokes || item.correct > item.targetLength || item.correct > item.keystrokes || item.mode === "timed" && (!DURATIONS.includes(item.duration) || item.elapsedMs > item.duration * 1e3 || item.status === "completed" && item.elapsedMs !== item.duration * 1e3) || item.mode === "timed" && item.corpusVersion != null && ![1, CORPUS_VERSION].includes(item.corpusVersion) || item.mode === "passage" && (item.status !== "completed" || item.source === "builtin" && (item.corpusVersion !== CORPUS_VERSION || typeof item.passageId !== "string" || !new RegExp("^" + item.language + "-[a-z]+-\\d{2}(?:-medium|-long)?$").test(item.passageId)))) return [];
+      if (!item || typeof item.id !== "string" || item.id.length > 100 || !item.id || ids.has(item.id) || !LANGUAGES.includes(item.language) || !HINT_MODES.includes(item.hints) || item.language === "en" && item.hints !== "off" || item.pinyinFormat != null && !PINYIN_FORMATS.includes(item.pinyinFormat) || item.pinyinFormat === "shuangpin" && !SHUANGPIN_SCHEMES.includes(item.pinyinScheme) || item.rules !== RULES_VERSION2 || !["timed", "passage"].includes(item.mode) || !["builtin", "local"].includes(item.source) || !["completed", "early"].includes(item.status) || !Number.isFinite(item.accuracy) || item.accuracy < 0 || item.accuracy > 1 || !["at", "elapsedMs", "speed", "correct", "wrongKeys", "keystrokes", "targetLength"].every((key) => Number.isSafeInteger(item[key]) && item[key] >= 0) || item.at > 864e13 || item.elapsedMs < 1 || item.targetLength < 1 || item.wrongKeys > item.keystrokes || item.correct > item.targetLength || item.correct > item.keystrokes || item.mode === "timed" && (!DURATIONS.includes(item.duration) || item.elapsedMs > item.duration * 1e3 || item.status === "completed" && item.elapsedMs !== item.duration * 1e3) || item.mode === "timed" && item.corpusVersion != null && ![1, CORPUS_VERSION].includes(item.corpusVersion) || item.mode === "passage" && (item.status !== "completed" || item.source === "builtin" && (item.corpusVersion !== CORPUS_VERSION || typeof item.passageId !== "string" || !new RegExp("^" + item.language + "-[a-z]+-\\d{2}(?:-medium|-long)?$").test(item.passageId)))) return [];
       ids.add(item.id);
       return [{
         id: item.id,
@@ -3429,7 +3512,7 @@ function createPractice(React, platform) {
       language: result.language,
       hints: result.hints,
       ...effectivePinyin(result.language, result.hints, result),
-      rules: RULES_VERSION,
+      rules: RULES_VERSION2,
       corpusVersion: session.source ? null : CORPUS_VERSION,
       mode: session.mode,
       source: session.source ? "local" : "builtin",
@@ -3495,12 +3578,7 @@ function createPractice(React, platform) {
     }
   }
   function loadSoundPreference() {
-    const saved = readStored(SOUND_KEY);
-    return {
-      version: 1,
-      pack: saved?.version === 1 && SOUND_PACKS.includes(saved.pack) ? saved.pack : "off",
-      volume: saved?.version === 1 && Number.isFinite(saved.volume) ? Math.max(0, Math.min(100, Math.round(saved.volume))) : 30
-    };
+    return soundPreference(readStored(SOUND_KEY));
   }
   function loadHintPreference() {
     const saved = readStored(HINT_KEY);
@@ -3615,18 +3693,8 @@ function createPractice(React, platform) {
   function reconcileText(session, value, now) {
     session = checkDeadline(session, now);
     if (session.result) return session;
-    const before = characters(session.typed);
-    const after = characters(value).slice(0, session.target.length);
-    let start = 0;
-    while (start < before.length && start < after.length && before[start] === after[start]) start++;
-    let oldEnd = before.length;
-    let newEnd = after.length;
-    while (oldEnd > start && newEnd > start && before[oldEnd - 1] === after[newEnd - 1]) {
-      oldEnd--;
-      newEnd--;
-    }
-    if (start === oldEnd && start === newEnd) return session;
-    const inserted = after.slice(start, newEnd);
+    const { after, start, inserted, changed } = textEdit(session.typed, value, session.target.length);
+    if (!changed) return session;
     const next = {
       ...session,
       typed: after.join(""),
@@ -3770,6 +3838,7 @@ function createPractice(React, platform) {
     );
   }
   function useLocaleVersion() {
+    activeLanguage = detectLanguage(localeService);
     const [, setVersion] = React.useState(0);
     React.useEffect(() => {
       const service = localeService;
@@ -3815,8 +3884,8 @@ function createPractice(React, platform) {
     const recordsShowAllRef = React.useRef(null);
     const clearCancelRef = React.useRef(null);
     const clearButtonRef = React.useRef(null);
-    const [soundPreference, setSoundPreference] = React.useState(loadSoundPreference);
-    const soundPreferenceRef = React.useRef(soundPreference);
+    const [soundPreference2, setSoundPreference] = React.useState(loadSoundPreference);
+    const soundPreferenceRef = React.useRef(soundPreference2);
     const [settingsOpen, setSettingsOpen] = React.useState(false);
     const [soundStatus, setSoundStatus] = React.useState("idle");
     const [soundSaveError, setSoundSaveError] = React.useState(false);
@@ -3976,10 +4045,8 @@ function createPractice(React, platform) {
       const current = sessionRef.current;
       const state = audioRef.current;
       if (document.hidden || document.activeElement !== event.currentTarget || current.result || !inputReady() || current.mode === "timed" && current.startAt != null && performance.now() - current.startAt >= current.duration * 1e3 || event.repeat || input.repeat || event.ctrlKey || event.metaKey || event.altKey || soundPreferenceRef.current.pack === "off" || !soundPreferenceRef.current.volume) return;
-      const key = event.key;
-      const composing = compositionRef.current.active || input.isComposing || event.isComposing || input.keyCode === 229;
-      if (!(key?.length === 1 || ["Backspace", "Delete", "Process", "Unidentified"].includes(key) || key === "Enter" && composing)) return;
-      const kind = key === " " || input.code === "Space" ? "space" : key === "Backspace" || key === "Delete" ? "backspace" : key === "Enter" ? "enter" : "generic";
+      const kind = keySoundKind(event, input, compositionRef.current.active);
+      if (!kind) return;
       if (state.player && state.context.state === "running" && state.status === "ready" && state.pack === soundPreferenceRef.current.pack) state.player.play(kind);
       else if (state.status !== "error") void prepareSound();
     }
@@ -4114,13 +4181,13 @@ function createPractice(React, platform) {
       if (recordsPassage) recordsShowAllRef.current?.focus();
     }, [recordsPassage]);
     function clearRecords() {
-      const empty = { version: 4, best: {}, legacy: {}, history: [] };
-      if (!saveRecords(empty)) {
+      const empty2 = { version: 4, best: {}, legacy: {}, history: [] };
+      if (!saveRecords(empty2)) {
         setClearError(true);
         return;
       }
-      recordsRef.current = empty;
-      setRecords(empty);
+      recordsRef.current = empty2;
+      setRecords(empty2);
       setSaveError(false);
       setIsRecord(false);
       setComparison(null);
@@ -4636,7 +4703,7 @@ function createPractice(React, platform) {
               { className: "tp-select" },
               h(
                 "select",
-                { value: soundPreference.pack, "aria-label": t("soundPack"), onChange: (event) => changeSound({ pack: event.currentTarget.value }) },
+                { value: soundPreference2.pack, "aria-label": t("soundPack"), onChange: (event) => changeSound({ pack: event.currentTarget.value }) },
                 SOUND_PACKS.map((pack) => h("option", { key: pack, value: pack }, t("sound_" + pack)))
               ),
               h("svg", { className: "tp-select-chevron", viewBox: "0 0 12 12", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, focusable: false }, h("path", { d: "M3 4.5 6 7.5 9 4.5" }))
@@ -4645,7 +4712,7 @@ function createPractice(React, platform) {
           h("button", {
             className: "tp-btn",
             type: "button",
-            disabled: soundPreference.pack === "off" || !soundPreference.volume,
+            disabled: soundPreference2.pack === "off" || !soundPreference2.volume,
             onClick: () => {
               stopSound();
               void prepareSound(true);
@@ -4664,11 +4731,11 @@ function createPractice(React, platform) {
               min: 0,
               max: 100,
               step: 5,
-              value: soundPreference.volume,
-              "aria-valuetext": soundPreference.volume + "%",
+              value: soundPreference2.volume,
+              "aria-valuetext": soundPreference2.volume + "%",
               onChange: (event) => changeSound({ volume: Number(event.currentTarget.value) })
             }),
-            h("output", { "aria-hidden": true }, soundPreference.volume + "%")
+            h("output", { "aria-hidden": true }, soundPreference2.volume + "%")
           )
         ),
         h(
@@ -4858,6 +4925,7 @@ function createPractice(React, platform) {
       "div",
       {
         className: "tp-root" + (isIme ? " tp-ime" : "") + (session.hints !== "off" ? " tp-annotated" : ""),
+        "data-platform": platform.id,
         ref: rootRef,
         "data-cursor-shape": cursorPreference.shape,
         "data-cursor-glow": String(cursorPreference.glow),
@@ -4897,6 +4965,7 @@ function createPractice(React, platform) {
                 )
               )
             ),
+            platform.Navigation ? h(platform.Navigation, { disabled: running }) : null,
             h(
               "div",
               { className: "tp-header-actions" },
@@ -5199,6 +5268,1316 @@ function createPractice(React, platform) {
   return { TypingPage, PanelIcon, CSS, t };
 }
 
+// packages/practice/src/mode-navigation.js
+function createModeNavigation(React) {
+  const Context = React.createContext(null);
+  function Navigation({ disabled, title }) {
+    const { mode, setMode, language } = React.useContext(Context);
+    const zh2 = language === "zh";
+    return React.createElement(
+      "nav",
+      { className: "tp-seg tf-mode-switch", "aria-label": zh2 ? "模式" : "Mode" },
+      ...[["practice", zh2 ? "练习" : "Practice"], ["game", zh2 ? "游戏" : "Game"]].map(([id, label]) => React.createElement("button", {
+        key: id,
+        className: "tp-seg-btn" + (mode === id ? " active" : ""),
+        type: "button",
+        "aria-pressed": mode === id,
+        disabled,
+        title: disabled ? title : void 0,
+        onClick: () => setMode(id)
+      }, label))
+    );
+  }
+  return { Context, Navigation };
+}
+
+// data/game-words.json
+var game_words_default = {
+  version: 1,
+  language: "zh",
+  license: "MIT",
+  words: [
+    "山",
+    "春天",
+    "雨",
+    "阅读",
+    "风",
+    "河流",
+    "云",
+    "清晨",
+    "水",
+    "阳光",
+    "花",
+    "森林",
+    "月",
+    "微风",
+    "雪",
+    "书店",
+    "海",
+    "天空",
+    "树",
+    "晚餐",
+    "星",
+    "朋友",
+    "茶",
+    "脚步",
+    "光",
+    "窗外",
+    "鸟",
+    "声音",
+    "书",
+    "远方",
+    "叶",
+    "故事",
+    "火",
+    "秋天",
+    "路",
+    "田野",
+    "桥",
+    "城市",
+    "门",
+    "明天",
+    "灯",
+    "安静",
+    "纸",
+    "咖啡",
+    "笔",
+    "午后",
+    "船",
+    "旅行",
+    "湖",
+    "花园",
+    "鱼",
+    "白云",
+    "猫",
+    "厨房",
+    "狗",
+    "工作",
+    "米",
+    "散步",
+    "竹",
+    "等待",
+    "石",
+    "河岸",
+    "沙",
+    "温暖",
+    "木",
+    "夏日",
+    "草",
+    "夜晚",
+    "江",
+    "回家",
+    "泉",
+    "音乐",
+    "钟",
+    "树影",
+    "画",
+    "味道",
+    "云朵",
+    "面包",
+    "早餐",
+    "公园",
+    "空气",
+    "风景",
+    "日记",
+    "想象",
+    "学习",
+    "自由",
+    "希望",
+    "记忆",
+    "彩虹",
+    "季节",
+    "笑容",
+    "街道",
+    "车站",
+    "山谷",
+    "石头",
+    "屋顶",
+    "晚风",
+    "晨光",
+    "落叶",
+    "细雨",
+    "故乡",
+    "星河",
+    "池塘",
+    "小路",
+    "远山",
+    "海边",
+    "沙滩",
+    "雨声",
+    "日落",
+    "朝阳",
+    "果实",
+    "种子",
+    "书页",
+    "文字",
+    "时间",
+    "世界",
+    "生活",
+    "心情",
+    "背包",
+    "地图"
+  ]
+};
+
+// packages/practice/src/game/engine.js
+var gameWords = game_words_default.words;
+var WORDS_VERSION = game_words_default.version;
+var RULES_VERSION = 2;
+var SHOT_MS = 160;
+function createGameEngine({ words = gameWords, random = Math.random, lanes = 5, config = {} } = {}) {
+  const rules = { countdownMs: 3e3, spawnMs: 2160, fallMs: 8200, maxTargets: 6, lives: 5, ...config };
+  const minimumSpawn = Math.min(1200, rules.spawnMs);
+  const minimumFall = Math.min(6e3, rules.fallMs);
+  const pool = [...new Set(words)];
+  const state = {
+    status: "ready",
+    countdown: 3,
+    time: 0,
+    score: 0,
+    lives: rules.lives,
+    level: 1,
+    kills: 0,
+    combo: 0,
+    bestCombo: 0,
+    targets: [],
+    shots: [],
+    error: false,
+    misses: 0
+  };
+  let version = 0;
+  let laneCount = Math.max(1, lanes);
+  let nextId = 1;
+  let nextSpawn = 0;
+  let lastNow = 0;
+  let countdownEnd = 0;
+  let pausedStatus = "running";
+  let countdownRemaining = 0;
+  const change = () => {
+    version++;
+  };
+  const levelAt = (time) => 1 + Math.floor(time / 3e4);
+  const index = (length) => Math.min(length - 1, Math.max(0, Math.floor(random() * length)));
+  const progress = (target) => Math.max(0, Math.min(1, (state.time - target.bornAt) / target.fallMs));
+  function spawn() {
+    const max = Math.min(8, rules.maxTargets + Math.floor((state.level - 1) / 2));
+    if (state.targets.length >= max) return;
+    const available = Array.from({ length: laneCount }, (_, i) => i).filter((lane) => !state.targets.some((target) => target.lane === lane && progress(target) < 0.22));
+    const eligible = pool.filter((text2) => !state.targets.some((target) => target.text.startsWith(text2) || text2.startsWith(target.text)));
+    if (!available.length || !eligible.length) return;
+    const text = eligible[index(eligible.length)];
+    const fallMs = Math.max(minimumFall, rules.fallMs - (state.level - 1) * 400) * (1 + 0.18 * ([...text].length - 1));
+    state.targets.push({ id: nextId++, text, lane: available[index(available.length)], bornAt: state.time, fallMs, status: "falling" });
+    change();
+  }
+  function advance(end) {
+    while (state.status === "running") {
+      const deadline = Math.min(Infinity, ...state.targets.filter((target) => target.status === "falling").map((target) => target.bornAt + target.fallMs));
+      const shotEnd = Math.min(Infinity, ...state.shots.map((shot) => shot.endsAt));
+      const eventTime = Math.min(nextSpawn, deadline, shotEnd);
+      if (eventTime > end) break;
+      state.time = eventTime;
+      state.level = levelAt(state.time);
+      const expired = new Set(state.shots.filter((shot) => shot.endsAt <= eventTime).map((shot) => shot.id));
+      if (expired.size) {
+        state.shots = state.shots.filter((shot) => !expired.has(shot.id));
+        state.targets = state.targets.filter((target) => !expired.has(target.id));
+        change();
+      }
+      const missed = state.targets.filter((target) => target.status === "falling" && target.bornAt + target.fallMs <= eventTime);
+      if (missed.length) {
+        state.targets = state.targets.filter((target) => !missed.includes(target));
+        state.lives = Math.max(0, state.lives - missed.length);
+        state.misses += missed.length;
+        state.combo = 0;
+        change();
+        if (!state.lives) {
+          state.status = "ended";
+          break;
+        }
+      }
+      if (nextSpawn <= eventTime) {
+        spawn();
+        nextSpawn = eventTime + Math.max(minimumSpawn, rules.spawnMs - (state.level - 1) * 120);
+      }
+    }
+    if (state.status === "running") {
+      state.time = end;
+      const nextLevel = levelAt(end);
+      if (state.level !== nextLevel) {
+        state.level = nextLevel;
+        change();
+      }
+    }
+  }
+  function tick(now) {
+    if (state.status === "countdown") {
+      const count = Math.max(0, Math.ceil((countdownEnd - now) / 1e3));
+      if (state.countdown !== count) {
+        state.countdown = count;
+        change();
+      }
+      if (now < countdownEnd) return;
+      state.status = "running";
+      lastNow = countdownEnd;
+      change();
+    }
+    if (state.status !== "running") return;
+    const elapsed = Math.max(0, now - lastNow);
+    lastNow = Math.max(lastNow, now);
+    advance(state.time + elapsed);
+  }
+  return {
+    state,
+    get version() {
+      return version;
+    },
+    get lanes() {
+      return laneCount;
+    },
+    progress,
+    start(now) {
+      if (state.status !== "ready") return;
+      state.status = "countdown";
+      countdownEnd = now + rules.countdownMs;
+      lastNow = now;
+      change();
+    },
+    tick,
+    submit(value, now) {
+      tick(now);
+      if (state.status !== "running" || !value) return "";
+      const target = state.targets.find((target2) => target2.status === "falling" && value === target2.text);
+      if (target) {
+        target.hitProgress = progress(target);
+        target.status = "hit";
+        state.shots.push({ id: target.id, lane: target.lane, progress: target.hitProgress, firedAt: state.time, endsAt: state.time + SHOT_MS });
+        state.score += 10 * [...target.text].length;
+        state.kills++;
+        state.combo++;
+        state.bestCombo = Math.max(state.bestCombo, state.combo);
+      }
+      state.error = !target;
+      if (state.error) state.combo = 0;
+      change();
+      return "";
+    },
+    pause(now) {
+      tick(now);
+      if (!["running", "countdown"].includes(state.status)) return;
+      pausedStatus = state.status;
+      countdownRemaining = Math.max(0, countdownEnd - now);
+      state.status = "paused";
+      change();
+    },
+    resume(now) {
+      if (state.status !== "paused") return;
+      state.status = pausedStatus;
+      lastNow = now;
+      if (pausedStatus === "countdown") countdownEnd = now + countdownRemaining;
+      change();
+    },
+    setLanes(next) {
+      laneCount = Math.max(1, next);
+      state.targets.forEach((target, i) => {
+        target.lane = i % laneCount;
+      });
+      state.shots.forEach((shot) => {
+        shot.lane = state.targets.find((target) => target.id === shot.id)?.lane ?? 0;
+      });
+      change();
+    }
+  };
+}
+
+// packages/practice/src/game/records.js
+var GAME_RECORDS_KEY = "typefeel.game.records.v1";
+var empty = () => ({ version: 1, rulesVersion: RULES_VERSION, wordsVersion: WORDS_VERSION, best: 0, bests: {}, history: [] });
+var number = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+function valid(record) {
+  return record && record.language === "zh" && record.mode === "survival" && Number.isInteger(record.rulesVersion) && record.rulesVersion >= 1 && record.rulesVersion <= RULES_VERSION && record.wordsVersion === WORDS_VERSION && ["score", "kills", "bestCombo", "time", "level", "at"].every((key) => number(record[key]));
+}
+function loadGameRecords(storage, key = GAME_RECORDS_KEY) {
+  try {
+    const value = JSON.parse(storage.getItem(key) || "null");
+    if (value?.version !== 1 || !Number.isInteger(value.rulesVersion) || value.rulesVersion < 1 || value.rulesVersion > RULES_VERSION || value.wordsVersion !== WORDS_VERSION) return empty();
+    const history = Array.isArray(value.history) ? value.history.filter(valid).slice(0, 20) : [];
+    const bests = {};
+    for (let rules = 1; rules <= RULES_VERSION; rules++) {
+      bests[rules] = Math.max(
+        number(value.bests?.[rules]) ? value.bests[rules] : 0,
+        value.rulesVersion === rules && number(value.best) ? value.best : 0,
+        ...history.filter((record) => record.rulesVersion === rules).map((record) => record.score)
+      );
+    }
+    return { ...empty(), best: bests[RULES_VERSION], bests, history };
+  } catch {
+    return empty();
+  }
+}
+function saveGameResult(storage, state, key = GAME_RECORDS_KEY) {
+  const record = {
+    score: state.score,
+    kills: state.kills,
+    bestCombo: state.bestCombo,
+    time: Math.round(state.time),
+    level: state.level,
+    language: "zh",
+    mode: "survival",
+    rulesVersion: RULES_VERSION,
+    wordsVersion: WORDS_VERSION,
+    at: Date.now()
+  };
+  const previous = loadGameRecords(storage, key);
+  const best = Math.max(previous.best, record.score);
+  const next = { ...previous, best, bests: { ...previous.bests, [RULES_VERSION]: best }, history: [record, ...previous.history].slice(0, 20) };
+  try {
+    storage.setItem(key, JSON.stringify(next));
+    return { ...next, saved: true };
+  } catch {
+    return { ...next, saved: false };
+  }
+}
+
+// packages/practice/src/game/shortcuts.js
+function handleGamePauseShortcut(event, { status, composing, inside, dialogOpen, pause }) {
+  const escape = event.key === "Escape" && !event.metaKey && !event.ctrlKey;
+  const print = (event.key?.toLowerCase() === "p" || event.code === "KeyP") && Boolean(event.metaKey) !== Boolean(event.ctrlKey);
+  if (!escape && !print || event.altKey || event.shiftKey || composing || event.isComposing || event.keyCode === 229 || dialogOpen || !inside || !["running", "countdown", "paused"].includes(status)) return false;
+  event.preventDefault();
+  if (!event.repeat) pause();
+  return true;
+}
+function reserveGamePauseShortcut(shortcuts, apple, label) {
+  return shortcuts?.registerFixed?.({
+    id: "typing-practice.game.pause",
+    label: () => label,
+    keys: [apple ? "⌘" : "Ctrl", "P"],
+    bindings: [{ code: "KeyP", modifiers: [apple ? "meta" : "control"] }],
+    group: "application"
+  });
+}
+
+// packages/practice/src/game/effects.js
+function createGameEffects(context, onError = () => {
+}) {
+  const master = context.createGain();
+  master.connect(context.destination);
+  const voices = /* @__PURE__ */ new Set();
+  let volume2 = 0;
+  function release(voice, cancel = false) {
+    voice.tone.onended = null;
+    if (cancel) {
+      try {
+        voice.tone.stop();
+      } catch {
+      }
+    }
+    voice.tone.disconnect();
+    voice.envelope.disconnect();
+    voices.delete(voice);
+  }
+  function stop() {
+    for (const voice of voices) release(voice, true);
+  }
+  function setVolume(next) {
+    volume2 = Math.max(0, Math.min(100, next));
+    master.gain.setValueAtTime(volume2 / 100 * 0.35, context.currentTime);
+    if (!volume2) stop();
+  }
+  function play(kind, offset = 0) {
+    if (!volume2 || context.state !== "running") return false;
+    let voice;
+    try {
+      if (voices.size >= 8) release(voices.values().next().value, true);
+      const tone = context.createOscillator();
+      const envelope = context.createGain();
+      voice = { tone, envelope };
+      tone.connect(envelope);
+      envelope.connect(master);
+      const at = context.currentTime + offset;
+      const hit = kind === "hit";
+      const duration = hit ? 0.09 : 0.16;
+      tone.type = hit ? "sine" : "triangle";
+      tone.frequency.setValueAtTime(hit ? 880 : 180, at);
+      tone.frequency.exponentialRampToValueAtTime(hit ? 1320 : 70, at + duration);
+      envelope.gain.setValueAtTime(1e-4, at);
+      envelope.gain.exponentialRampToValueAtTime(0.35, at + 4e-3);
+      envelope.gain.exponentialRampToValueAtTime(1e-4, at + duration);
+      tone.onended = () => release(voice);
+      voices.add(voice);
+      tone.start(at);
+      tone.stop(at + duration);
+      return true;
+    } catch {
+      if (voice) release(voice, true);
+      onError();
+      return false;
+    }
+  }
+  return {
+    play,
+    setVolume,
+    stop,
+    preview() {
+      stop();
+      return play("hit") && play("miss", 0.22);
+    },
+    dispose() {
+      stop();
+      master.disconnect();
+    }
+  };
+}
+
+// packages/practice/src/game/audio.js
+var GAME_AUDIO_KEY = "typefeel.game.audio.v1";
+var KEYBOARD_AUDIO_KEY = "typefeel.practice.sound.v1";
+var defaultKeys = { effects: GAME_AUDIO_KEY, keyboard: KEYBOARD_AUDIO_KEY };
+var KEYBOARD_PACKS = SOUND_PACKS.filter((pack) => pack !== "off");
+var volume = (value, fallback) => Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : fallback;
+function read(storage, key) {
+  try {
+    return JSON.parse(storage.getItem(key) || "null");
+  } catch {
+    return null;
+  }
+}
+function loadGameAudioPreferences(storage, keys = defaultKeys) {
+  const saved = read(storage, keys.effects);
+  const game = saved?.version === 1 ? saved : {};
+  const keyboard = soundPreference(read(storage, keys.keyboard));
+  return {
+    effects: { enabled: typeof game.effects?.enabled === "boolean" ? game.effects.enabled : true, volume: volume(game.effects?.volume, 35) },
+    keyboard: { enabled: keyboard.pack !== "off", pack: keyboard.pack !== "off" ? keyboard.pack : KEYBOARD_PACKS.includes(game.keyboardPack) ? game.keyboardPack : "mxblue", volume: keyboard.volume }
+  };
+}
+function saveGameAudioPreferences(storage, preferences, group, keys = defaultKeys) {
+  try {
+    const saved = read(storage, keys.effects);
+    if (group === "keyboard") {
+      storage.setItem(keys.keyboard, JSON.stringify({ version: 1, pack: preferences.keyboard.enabled ? preferences.keyboard.pack : "off", volume: preferences.keyboard.volume }));
+    }
+    storage.setItem(keys.effects, JSON.stringify({
+      version: 1,
+      effects: group === "effects" ? preferences.effects : saved?.effects || preferences.effects,
+      keyboardPack: group === "keyboard" ? preferences.keyboard.pack : saved?.keyboardPack || preferences.keyboard.pack
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function createGameAudio({ AudioContext, loadAudio, preferences, onStatus = () => {
+} }) {
+  let pref = preferences;
+  let context, effects, player, modulePromise, preparing;
+  let selectedPack = "off";
+  let disposed = false;
+  let keyboardEpoch = 0;
+  let effectsEpoch = 0;
+  let lastEngine, lastKills = 0, lastMisses = 0;
+  const status = { keyboard: "idle", effects: "idle" };
+  function report(group, next) {
+    if (disposed || status[group] === next) return;
+    status[group] = next;
+    onStatus(group, next);
+  }
+  const keyboardOn = () => pref.keyboard.enabled && pref.keyboard.volume > 0;
+  const effectsOn = () => pref.effects.enabled && pref.effects.volume > 0;
+  async function prepare() {
+    if (disposed || !keyboardOn() && !effectsOn()) return false;
+    let resumed;
+    try {
+      if (!context) {
+        if (!AudioContext) throw Error("Web Audio unavailable");
+        context = new AudioContext({ latencyHint: "interactive" });
+        effects = createGameEffects(context, () => report("effects", "error"));
+      }
+      effects.setVolume(effectsOn() ? pref.effects.volume : 0);
+      resumed = context.state === "running" ? Promise.resolve(true) : Promise.resolve(context.resume()).then(() => true, () => false);
+      report("effects", "ready");
+    } catch {
+      report("effects", "error");
+      report("keyboard", "error");
+      return false;
+    }
+    let ready = false;
+    if (keyboardOn()) {
+      try {
+        if (!player) {
+          report("keyboard", "loading");
+          if (!modulePromise) modulePromise = Promise.resolve().then(loadAudio).catch((error) => {
+            modulePromise = null;
+            throw error;
+          });
+          const module2 = await modulePromise;
+          if (disposed) return false;
+          if (keyboardOn() && !player) player = module2.createAudioPlayer(context, module2.samples, (next) => report("keyboard", next));
+        }
+        if (keyboardOn() && player) {
+          player.setVolume(pref.keyboard.volume);
+          if (selectedPack !== pref.keyboard.pack || status.keyboard === "error") {
+            selectedPack = pref.keyboard.pack;
+            preparing = player.select(selectedPack);
+          }
+          ready = await preparing;
+        }
+      } catch {
+        report("keyboard", "error");
+      }
+    }
+    const running = await resumed;
+    if (disposed) return false;
+    if (!running || context.state !== "running") {
+      report("effects", "error");
+      report("keyboard", "error");
+      return false;
+    }
+    return Boolean(ready || effectsOn());
+  }
+  function configure(next) {
+    const keyChanged = ["enabled", "pack", "volume"].some((key) => pref.keyboard[key] !== next.keyboard[key]);
+    if (pref.effects.enabled !== next.effects.enabled || pref.effects.volume !== next.effects.volume) effectsEpoch++;
+    if (keyChanged) keyboardEpoch++;
+    const packChanged = pref.keyboard.pack !== next.keyboard.pack || pref.keyboard.enabled !== next.keyboard.enabled;
+    pref = next;
+    effects?.setVolume(effectsOn() ? pref.effects.volume : 0);
+    player?.setVolume(keyboardOn() ? pref.keyboard.volume : 0);
+    if (packChanged || !keyboardOn()) {
+      selectedPack = "off";
+      preparing = player?.select("off");
+      if (!keyboardOn()) report("keyboard", "idle");
+    }
+  }
+  function stop() {
+    keyboardEpoch++;
+    effectsEpoch++;
+    player?.stop();
+    effects?.stop();
+  }
+  return {
+    prepare,
+    configure,
+    stop,
+    key(event, input = event, composing = false) {
+      const kind = keySoundKind(event, input, composing);
+      if (disposed || !kind || !keyboardOn()) return false;
+      if (context?.state === "running" && status.keyboard === "ready" && selectedPack === pref.keyboard.pack) return player.play(kind);
+      if (status.keyboard !== "loading" && status.keyboard !== "error") void prepare();
+      return false;
+    },
+    observe(engine, audible = true) {
+      if (lastEngine !== engine) {
+        lastEngine = engine;
+        lastKills = 0;
+        lastMisses = 0;
+      }
+      const { kills, misses, status: phase } = engine.state;
+      const hits = Math.max(0, kills - lastKills), landings = Math.max(0, misses - lastMisses);
+      lastKills = kills;
+      lastMisses = misses;
+      if (disposed || !audible || !effectsOn() || !["running", "ended"].includes(phase)) return;
+      for (let i = 0; i < Math.min(4, hits); i++) effects?.play("hit");
+      for (let i = 0; i < Math.min(4, landings); i++) effects?.play("miss");
+    },
+    async previewKeyboard() {
+      const epoch = keyboardEpoch;
+      await prepare();
+      return !disposed && epoch === keyboardEpoch && keyboardOn() && status.keyboard === "ready" && context?.state === "running" ? player.preview() : false;
+    },
+    previewEffects() {
+      const epoch = effectsEpoch;
+      const ready = prepare();
+      if (context?.state === "running" && effectsOn()) return effects.preview();
+      return ready.then(() => !disposed && epoch === effectsEpoch && effectsOn() ? effects?.preview() || false : false);
+    },
+    dispose() {
+      disposed = true;
+      stop();
+      effects?.dispose();
+      if (player) player.dispose();
+      else if (context) {
+        try {
+          Promise.resolve(context.close()).catch(() => {
+          });
+        } catch {
+        }
+      }
+    }
+  };
+}
+
+// packages/practice/src/game/styles.js
+var CSS2 = `
+.tf-game-root { min-height: 0; }
+.tf-game-root .tp-scroll { overflow-y: auto; scrollbar-gutter: auto; }
+.tf-game-root .tf-game-page { height: 100%; min-height: 0; gap: 20px; padding-bottom: 16px; }
+.tf-game-root .tp-header { align-items: center; flex-wrap: nowrap; gap: 12px; }
+.tf-game-root .tp-brand { flex: 1 1 auto; min-width: 42px; }
+.tf-game-root .tp-logo { flex: 0 0 42px; aspect-ratio: 1; }
+.tf-game-root .tp-logo img { width: 100%; height: 100%; object-fit: contain; }
+.tf-game-root .tp-header-actions { flex-wrap: nowrap; gap: 8px; }
+.tf-game-stats { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 4px 0 8px; font-variant-numeric: tabular-nums; }
+.tf-game-progress { display: flex; gap: 32px; min-width: 0; }
+.tf-game-health { align-items: center; }
+.tf-game-score { text-align: right; }
+.tf-game-stat { display: flex; flex-direction: column; gap: 2px; }
+.tf-game-stat-label { color: var(--tf-label-secondary); font-size: 12px; }
+.tf-game-stat-value { font-family: var(--tp-font-mono); font-size: 26px; line-height: 1.2; font-weight: 500; }
+.tf-game-score .tf-game-stat-value { color: var(--tf-brand-primary); }
+.tf-game-lives { display: flex; align-items: center; gap: 6px; height: 31px; }
+.tf-game-life { display: block; width: 4px; height: 20px; border-radius: 2px; background: var(--tf-brand-primary); transition: background 160ms ease; }
+.tf-game-life[data-lost="true"] { background: var(--tf-border-l1); }
+.tf-game-lives[data-low="true"] .tf-game-life:not([data-lost="true"]) { background: var(--tf-state-error-primary); }
+.tf-game-stage { position: relative; isolation: isolate; flex: 1; min-height: 180px; overflow: hidden; border-bottom: 1px solid var(--tf-border-l2); cursor: text; }
+.tf-game-stage[data-miss="true"] { border-bottom-color: var(--tf-state-error-primary); }
+.tf-game-target { position: absolute; top: 0; left: 0; white-space: nowrap; font-size: clamp(24px, 3vw, 30px); line-height: 1.25; letter-spacing: .08em; font-weight: 450; will-change: transform; }
+.tf-game-target[data-danger="true"] { color: var(--tf-state-error-primary); }
+.tf-game-target[data-hit="true"] { color: var(--tf-brand-primary); animation: tf-game-hit 160ms ease-out both; }
+.tf-game-shot, .tf-game-emitter { pointer-events: none; width: 3px; border-radius: 2px; background: var(--tp-cursor-color); ${CURSOR_GLOW} }
+.tf-game-shot { position: absolute; top: 0; left: 0; height: 18px; transform-origin: center; will-change: transform; }
+.tf-game-emitter { height: 22px; margin: 0 auto 8px; }
+.tf-game-dock { position: relative; flex: none; text-align: center; }
+.tf-game-input { display: block; resize: none; width: min(100%, 340px); height: 45px; margin: 0 auto; border: 0; border-bottom: 1px solid transparent; border-radius: 0; outline: none; background: transparent; padding: 8px 12px; text-align: center; font: inherit; font-size: 20px; line-height: 28px; color: var(--tf-label-primary); caret-color: var(--tp-cursor-color); overflow: hidden; white-space: pre; }
+.tf-game-input::placeholder { color: var(--tf-label-secondary); font-size: 15px; }
+.tf-game-input:focus { border-bottom-color: var(--tf-border-l1); }
+.tf-game-input[aria-invalid="true"] { color: var(--tf-state-error-primary); border-bottom-color: var(--tf-state-error-primary); }
+.tf-game-hint { min-height: 18px; margin: 5px 0 0; font-size: 12px; color: var(--tf-label-secondary); }
+.tf-game-hint[data-error="true"] { color: var(--tf-state-error-primary); }
+.tf-game-footer { display: flex; flex: none; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 12px; color: var(--tf-label-secondary); font-variant-numeric: tabular-nums; }
+.tf-game-summary { margin-inline-start: auto; white-space: nowrap; }
+.tf-game-overlay { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; padding: 16px; text-align: center; background: var(--tf-bg-base); }
+.tf-game-overlay h2 { margin: 0; font-size: 30px; font-weight: 550; letter-spacing: -.035em; }
+.tf-game-overlay p { margin: 0; max-width: 340px; font-size: 14px; color: var(--tf-label-secondary); line-height: 1.8; }
+.tf-game-overlay .tf-game-countdown { font-size: 64px; font-weight: 400; color: var(--tf-brand-primary); font-family: var(--tp-font-mono); }
+.tf-game-primary { justify-content: center; background: var(--tf-brand-primary); color: var(--tf-on-brand, #fff); border-color: transparent; min-width: 120px; }
+.tf-game-primary:hover { filter: brightness(1.08); background: var(--tf-brand-primary); }
+.tf-game-result-score { font-size: 50px; line-height: 1; font-weight: 450; color: var(--tf-brand-primary); font-family: var(--tp-font-mono); }
+.tf-game-result-stats { display: flex; justify-content: center; gap: 28px; }
+.tf-game-result-stats .tf-game-stat-value { font-size: 21px; }
+.tf-game-settings { max-width: 480px; width: calc(100% - 40px); max-height: 85svh; overflow-y: auto; border: 1px solid var(--tf-border-l1); border-radius: 12px; color: var(--tf-label-primary); background: var(--tf-bg-base); padding: 24px; }
+.tf-game-rules p { margin: 0 0 10px; color: var(--tf-label-secondary); font-size: 13px; line-height: 1.7; }
+.tf-game-settings::backdrop { background: #0005; }
+.tf-game-settings-header { position: sticky; top: -24px; z-index: 1; display: flex; align-items: center; justify-content: space-between; margin: -24px -24px 4px; padding: 12px 16px 8px 24px; background: var(--tf-bg-base); }
+.tf-game-settings-header h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.tf-game-settings-header button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; }
+.tf-game-audio-section { display: grid; gap: 10px; padding-bottom: 12px; }
+.tf-game-audio-heading { display: flex; align-items: center; gap: 8px; }
+.tf-game-audio-heading h3 { flex: 1; margin: 0; }
+.tf-game-audio-heading .tp-btn { min-height: 32px; padding: 4px 8px; }
+.tf-game-audio-status { margin: 0; min-height: 18px; color: var(--tf-label-secondary); font-size: 12px; }
+.tf-game-audio-status + .tp-settings-section { border-top: 1px solid var(--tf-border-l1); padding-top: 12px; }
+.tf-game-rules { margin-top: 12px; }
+@keyframes tf-game-hit { to { opacity: 0; filter: blur(3px); } }
+@media (max-width: 600px) {
+  .tf-game-root .tf-game-page { padding-inline: 20px; gap: 16px; }
+  .tf-game-root .tp-brandtext { display: none; }
+  .tf-game-root .tp-brand { flex: 0 0 auto; min-width: 32px; }
+  .tf-game-root .tp-logo { width: 32px; height: 32px; flex-basis: 32px; border-radius: 9px; }
+  .tf-game-root .tf-mode-switch { margin-inline: auto; }
+  .tf-game-root .tf-mode-switch .tp-seg-btn { min-width: 0; padding-inline: 8px; font-size: 12px; }
+  .tf-game-progress { gap: 16px; }
+  .tf-game-root .tp-header-actions .tp-btn { padding-inline: 8px; }
+  .tf-game-stat-value { font-size: 23px; }
+  .tf-game-target { font-size: 25px; }
+}
+@media (max-width: 360px) { .tf-game-root .tp-header { flex-wrap: wrap; gap: 8px; } .tf-game-root .tp-header-actions { margin-inline-start: auto; } }
+.tf-game-root[data-compact="true"] .tf-game-page { padding-top: 12px !important; padding-bottom: 8px !important; gap: 8px !important; }
+.tf-game-root[data-compact="true"] .tp-subtitle { display: none; }
+.tf-game-root[data-compact="true"] .tf-game-stage { min-height: 70px; }
+.tf-game-root[data-compact="true"] .tf-game-stats { padding: 0; }
+.tf-game-root[data-compact="true"] .tf-game-emitter { height: 14px; margin-bottom: 2px; }
+.tf-game-root[data-compact="true"] .tf-game-overlay { gap: 8px; padding: 4px; }
+.tf-game-root[data-compact="true"] .tf-game-overlay h2 { font-size: 22px; }
+.tf-game-root[data-compact="true"] .tf-game-overlay p { font-size: 12px; }
+.tf-game-root[data-compact="true"] .tf-game-result-score { font-size: 30px; }
+.tf-game-root[data-compact="true"] .tf-game-result-stats { gap: 18px; }
+@media (prefers-reduced-motion: reduce) {
+  .tf-game-target[data-hit="true"] { animation: none; opacity: .5; }
+  .tf-game-shot { opacity: .35; }
+  .tf-game-life { transition: none; }
+}
+`;
+
+// packages/practice/src/game/create-game.js
+var copy = {
+  zh: {
+    title: "字感",
+    subtitle: "落字游戏",
+    score: "得分",
+    lives: "生命",
+    level: "等级",
+    combo: "连击",
+    pause: "暂停",
+    resume: "继续",
+    settings: "设置",
+    close: "关闭",
+    start: "开始",
+    ready: "落字",
+    rule: "输入完整文字，发射光标。漏掉 5 个，本局结束。",
+    paused: "已暂停",
+    ended: "本局结束",
+    restart: "再来一局",
+    input: "输入落下的文字",
+    placeholder: "输入文字",
+    hint: "整字或整词上屏后自动发射",
+    error: "没有匹配的目标，请输入完整词组",
+    best: "最高",
+    time: "存活",
+    kills: "消除",
+    bestCombo: "最高连击",
+    gameplay: "玩法",
+    gameplayHint: "输入完整词组以发射光标消灭目标。",
+    matchingHint: "每次上屏只匹配一个完整目标，多字、少字均不匹配。上屏后输入框自动清空。",
+    pauseHint: "按 Esc 或 Ctrl/Cmd+P 暂停，点击「继续」恢复。",
+    levelHint: "每存活 30 秒提升一级，文字出现更频繁、下落更快，同屏目标上限逐步增加。",
+    effects: "游戏音效",
+    keyboard: "键盘音效",
+    volume: "音量",
+    keyboardPack: "声音",
+    preview: "试听",
+    audioLoading: "正在加载键盘音效…",
+    audioError: "音效暂时无法播放，可以继续游戏。",
+    audioSaveError: "音效设置已应用，但未能保存到浏览器。",
+    saveError: "本局成绩未能保存到浏览器。",
+    switchHint: "暂停后可切换模式",
+    seconds: "秒"
+  },
+  en: {
+    title: "Type Feel",
+    subtitle: "Falling words",
+    score: "Score",
+    lives: "Lives",
+    level: "Level",
+    combo: "Combo",
+    pause: "Pause",
+    resume: "Continue",
+    settings: "Settings",
+    close: "Close",
+    start: "Start",
+    ready: "Falling words",
+    rule: "Type a complete target to fire a cursor. Five missed targets end the round.",
+    paused: "Paused",
+    ended: "Round over",
+    restart: "Play again",
+    input: "Type a falling word",
+    placeholder: "Type a word",
+    hint: "Confirm a whole character or word to fire",
+    error: "No matching target. Confirm a complete word.",
+    best: "Best",
+    time: "Survived",
+    kills: "Cleared",
+    bestCombo: "Best combo",
+    gameplay: "How to play",
+    gameplayHint: "Confirm a complete word to fire a cursor and clear the target.",
+    matchingHint: "Each commit must match one whole target. Extra or missing characters do not match. The input clears after every commit.",
+    pauseHint: "Press Esc or Ctrl/Cmd+P to pause. Choose Continue to resume.",
+    levelHint: "Every 30 seconds, the level increases. Targets appear more often and fall faster; the target limit gradually increases.",
+    effects: "Game sounds",
+    keyboard: "Keyboard sounds",
+    volume: "Volume",
+    keyboardPack: "Sound",
+    preview: "Preview",
+    audioLoading: "Loading keyboard sounds…",
+    audioError: "Audio is unavailable. You can keep playing.",
+    audioSaveError: "Sound settings applied, but could not be saved in your browser.",
+    saveError: "This score could not be saved in your browser.",
+    switchHint: "Pause to switch modes",
+    seconds: "s"
+  }
+};
+function createGamePage(React, platform = {}) {
+  const h = React.createElement;
+  return function GamePage({ language = "zh", storage, Navigation, Settings, loadAudio }) {
+    const t = copy[language] || copy.zh;
+    const soundCopy = dictionaries[language] || dictionaries.zh;
+    const engineRef = React.useRef(null);
+    if (!engineRef.current) engineRef.current = createGameEngine();
+    const engine = engineRef.current;
+    const [round, setRound] = React.useState(0);
+    const [view, setView] = React.useState(() => ({ ...engine.state }));
+    const [composing, setComposing] = React.useState(false);
+    const [records, setRecords] = React.useState(() => ({ ...loadGameRecords(storage, platform.recordsKey), saved: true }));
+    const [settingsOpen, setSettingsOpen] = React.useState(false);
+    const [compact, setCompact] = React.useState(false);
+    const [missFlash, setMissFlash] = React.useState(false);
+    const [audioPreferences, setAudioPreferences] = React.useState(() => loadGameAudioPreferences(storage, platform.audioKeys));
+    const audioPreferencesRef = React.useRef(audioPreferences);
+    const [audioStatus, setAudioStatus] = React.useState({ effects: "idle", keyboard: "idle" });
+    const [audioSaveError, setAudioSaveError] = React.useState(false);
+    const audioRef = React.useRef(null);
+    if (!audioRef.current) audioRef.current = createGameAudio({
+      AudioContext: window.AudioContext || window.webkitAudioContext,
+      loadAudio,
+      preferences: audioPreferences,
+      onStatus: (group, status) => setAudioStatus((previous) => ({ ...previous, [group]: status }))
+    });
+    const rootRef = React.useRef(null);
+    const stageRef = React.useRef(null);
+    const inputRef = React.useRef(null);
+    const dialogRef = React.useRef(null);
+    const restartRef = React.useRef(null);
+    const targetNodes = React.useRef(/* @__PURE__ */ new Map());
+    const shotNodes = React.useRef(/* @__PURE__ */ new Map());
+    const savedEngine = React.useRef(null);
+    const bufferRef = React.useRef(null);
+    const keyboardRef = React.useRef(null);
+    const syncRef = React.useRef(null);
+    const layoutRef = React.useRef({ width: 0, height: 0 });
+    function refresh() {
+      const current = engineRef.current;
+      audioRef.current.observe(current, !document.hidden && document.hasFocus());
+      setView({ ...current.state, targets: current.state.targets.map((target) => ({ ...target })), shots: [...current.state.shots] });
+      if (current.state.status === "ended" && savedEngine.current !== current) {
+        savedEngine.current = current;
+        setRecords(saveGameResult(storage, current.state, platform.recordsKey));
+      }
+    }
+    syncRef.current = refresh;
+    function makeBuffer() {
+      return createCommittedBuffer((value) => {
+        const current = engineRef.current;
+        if (current.state.status === "running") current.submit(value, performance.now());
+        refresh();
+        return "";
+      });
+    }
+    if (!bufferRef.current) bufferRef.current = makeBuffer();
+    function focusInput() {
+      inputRef.current?.focus({ preventScroll: true });
+    }
+    function start() {
+      void audioRef.current.prepare();
+      engineRef.current.start(performance.now());
+      refresh();
+      focusInput();
+    }
+    function restart() {
+      audioRef.current.stop();
+      void audioRef.current.prepare();
+      engineRef.current = createGameEngine({ lanes: engineRef.current.lanes });
+      bufferRef.current = makeBuffer();
+      setComposing(false);
+      setRound((value) => value + 1);
+      engineRef.current.start(performance.now());
+      refresh();
+    }
+    function pause() {
+      const current = engineRef.current;
+      if (current.state.status !== "ended") audioRef.current.stop();
+      current.pause(performance.now());
+      refresh();
+    }
+    function resume() {
+      const current = engineRef.current;
+      void audioRef.current.prepare();
+      current.resume(performance.now());
+      if (inputRef.current) inputRef.current.readOnly = false;
+      refresh();
+      focusInput();
+    }
+    const currentEvent = (event) => event.currentTarget === inputRef.current && engine === engineRef.current;
+    const guardPointer = (event) => event.preventDefault();
+    function changeAudio(group, patch) {
+      const previous = audioPreferencesRef.current;
+      const next = { ...previous, [group]: { ...previous[group], ...patch } };
+      audioPreferencesRef.current = next;
+      setAudioPreferences(next);
+      audioRef.current.configure(next);
+      setAudioSaveError(!saveGameAudioPreferences(storage, next, group, platform.audioKeys));
+      void audioRef.current.prepare();
+    }
+    function closeSettings() {
+      audioRef.current.stop();
+      setSettingsOpen(false);
+    }
+    function draw() {
+      const current = engineRef.current;
+      const stage = stageRef.current;
+      if (!stage) return;
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      const travel = Math.max(0, height - 42);
+      for (const target of current.state.targets) {
+        const node = targetNodes.current.get(target.id);
+        if (!node) continue;
+        const progress = target.status === "hit" ? target.hitProgress : current.progress(target);
+        const x = (target.lane + 0.5) * width / current.lanes;
+        node.style.transform = `translate3d(${x}px, ${2 + travel * progress}px, 0) translateX(-50%)`;
+        node.dataset.danger = String(progress > 0.8 && target.status !== "hit");
+      }
+      for (const shot of current.state.shots) {
+        const node = shotNodes.current.get(shot.id);
+        if (!node) continue;
+        const p = Math.min(1, Math.max(0, (current.state.time - shot.firedAt) / SHOT_MS));
+        const endX = (shot.lane + 0.5) * width / current.lanes;
+        const endY = 18 + travel * shot.progress;
+        const dx = endX - width / 2;
+        const dy = endY - (height - 12);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+        node.style.transform = `translate3d(${width / 2 + dx * p}px, ${height - 12 + dy * p}px, 0) rotate(${angle}deg)`;
+      }
+    }
+    React.useLayoutEffect(draw, [view]);
+    React.useEffect(() => () => audioRef.current.dispose(), []);
+    React.useEffect(() => {
+      if (round) focusInput();
+    }, [round]);
+    React.useEffect(() => {
+      if (!view.misses) {
+        setMissFlash(false);
+        return;
+      }
+      setMissFlash(true);
+      const timer = setTimeout(() => setMissFlash(false), 350);
+      return () => clearTimeout(timer);
+    }, [view.misses, round]);
+    React.useEffect(() => {
+      let frame;
+      let lastVersion = -1;
+      let lastSecond = -1;
+      function animate(now) {
+        const current = engineRef.current;
+        current.tick(now);
+        const second = Math.floor(current.state.time / 1e3);
+        if (lastVersion !== current.version || lastSecond !== second) {
+          lastVersion = current.version;
+          lastSecond = second;
+          syncRef.current();
+        }
+        draw();
+        frame = requestAnimationFrame(animate);
+      }
+      frame = requestAnimationFrame(animate);
+      return () => cancelAnimationFrame(frame);
+    }, []);
+    React.useEffect(() => {
+      function layout() {
+        const viewport = window.visualViewport;
+        const root = rootRef.current;
+        const height = platform.layout === "container" ? root?.clientHeight || 0 : viewport?.height || window.innerHeight;
+        if (root && platform.layout !== "container") root.style.height = `${height}px`;
+        setCompact(height < 600);
+        const width = stageRef.current?.clientWidth || window.innerWidth;
+        const previous = layoutRef.current;
+        const lanes = Math.max(2, Math.min(5, Math.floor(width / 140)));
+        const current = engineRef.current;
+        const widthChanged = Math.abs(previous.width - width) > 2;
+        const keyboardResize = document.activeElement === inputRef.current && window.matchMedia("(pointer: coarse)").matches;
+        if (previous.width && (widthChanged || Math.abs(previous.height - height) > 80 && !keyboardResize)) {
+          audioRef.current.stop();
+          current.pause(performance.now());
+        }
+        if (lanes !== current.lanes) current.setLanes(lanes);
+        layoutRef.current = { width, height };
+        syncRef.current();
+      }
+      function hidden() {
+        if (document.hidden) {
+          audioRef.current.stop();
+          engineRef.current.pause(performance.now());
+          syncRef.current();
+        }
+      }
+      function blur() {
+        audioRef.current.stop();
+        engineRef.current.pause(performance.now());
+        syncRef.current();
+      }
+      layout();
+      const observer = platform.layout === "container" && typeof ResizeObserver === "function" ? new ResizeObserver(layout) : null;
+      if (rootRef.current) observer?.observe(rootRef.current);
+      if (stageRef.current) observer?.observe(stageRef.current);
+      window.addEventListener("resize", layout);
+      window.visualViewport?.addEventListener("resize", layout);
+      document.addEventListener("visibilitychange", hidden);
+      window.addEventListener("blur", blur);
+      return () => {
+        observer?.disconnect();
+        window.removeEventListener("resize", layout);
+        window.visualViewport?.removeEventListener("resize", layout);
+        document.removeEventListener("visibilitychange", hidden);
+        window.removeEventListener("blur", blur);
+      };
+    }, []);
+    keyboardRef.current = (event) => handleGamePauseShortcut(event, {
+      status: engineRef.current.state.status,
+      composing: bufferRef.current.composing,
+      inside: Boolean(rootRef.current?.contains(document.activeElement)),
+      dialogOpen: settingsOpen,
+      pause
+    });
+    React.useEffect(() => {
+      const release = reserveGamePauseShortcut(platform.shortcuts?.(), /Mac|iPhone|iPad/.test(window.navigator?.platform || ""), t.pause);
+      const keydown = (event) => keyboardRef.current(event);
+      window.addEventListener("keydown", keydown, true);
+      return () => {
+        window.removeEventListener("keydown", keydown, true);
+        release?.();
+      };
+    }, [language]);
+    React.useEffect(() => {
+      if (view.status === "ended" && !composing) restartRef.current?.focus({ preventScroll: true });
+    }, [view.status, composing]);
+    React.useEffect(() => {
+      if (settingsOpen && !dialogRef.current?.open) dialogRef.current?.showModal();
+      if (!settingsOpen && dialogRef.current?.open) dialogRef.current?.close();
+    }, [settingsOpen]);
+    function stat(label, value) {
+      return h("div", { className: "tf-game-stat" }, h("span", { className: "tf-game-stat-label" }, label), h("span", { className: "tf-game-stat-value" }, value));
+    }
+    function primary(label, onClick, ref) {
+      return h("button", { className: "tp-btn tf-game-primary", type: "button", onClick, ref }, label);
+    }
+    function audioControls(group) {
+      const preference = audioPreferences[group];
+      const title = t[group === "effects" ? "effects" : "keyboard"];
+      const keyboard = group === "keyboard";
+      return h(
+        "section",
+        { className: "tp-settings-section tf-game-audio-section", "aria-labelledby": `tf-game-${group}-title` },
+        h(
+          "div",
+          { className: "tf-game-audio-heading" },
+          h("h3", { id: `tf-game-${group}-title` }, title),
+          h("button", {
+            type: "button",
+            className: "tp-btn tp-quiet",
+            "aria-label": `${t.preview}${language === "zh" ? "" : " "}${title}`,
+            disabled: !preference.enabled || !preference.volume || keyboard && audioStatus.keyboard === "loading",
+            onClick: () => {
+              if (keyboard) void audioRef.current.previewKeyboard();
+              else void audioRef.current.previewEffects();
+            }
+          }, t.preview),
+          h("label", { className: "tp-cursor-toggle" }, h("input", {
+            type: "checkbox",
+            role: "switch",
+            "aria-label": title,
+            checked: preference.enabled,
+            onChange: (event) => changeAudio(group, { enabled: event.currentTarget.checked })
+          }))
+        ),
+        keyboard ? h(
+          "label",
+          { className: "tp-sound-field" },
+          h("span", null, t.keyboardPack),
+          h(
+            "span",
+            { className: "tp-select" },
+            h(
+              "select",
+              {
+                "aria-label": language === "zh" ? "键盘声音" : "Keyboard sound",
+                value: preference.pack,
+                disabled: !preference.enabled,
+                onChange: (event) => changeAudio(group, { pack: event.currentTarget.value })
+              },
+              ...KEYBOARD_PACKS.map((pack) => h("option", { key: pack, value: pack }, soundCopy["sound_" + pack]))
+            ),
+            h("svg", { className: "tp-select-chevron", viewBox: "0 0 12 12", fill: "none", stroke: "currentColor", strokeWidth: 1.5, "aria-hidden": true }, h("path", { d: "M3 4.5 6 7.5 9 4.5" }))
+          )
+        ) : null,
+        h("label", { className: "tp-sound-field" }, h("span", null, t.volume), h(
+          "span",
+          { className: "tp-sound-volume" },
+          h("input", {
+            type: "range",
+            min: 0,
+            max: 100,
+            step: 5,
+            value: preference.volume,
+            disabled: !preference.enabled,
+            "aria-label": `${title}${language === "zh" ? "" : " "}${t.volume}`,
+            "aria-valuetext": `${preference.volume}%`,
+            onChange: (event) => changeAudio(group, { volume: Number(event.currentTarget.value) })
+          }),
+          h("output", { "aria-hidden": true }, `${preference.volume}%`)
+        )),
+        keyboard ? h("a", { className: "tp-sound-credit", href: "https://github.com/tplai/kbsim", target: "_blank", rel: "noreferrer" }, soundCopy.soundCredit) : null
+      );
+    }
+    const live = ["running", "countdown"].includes(view.status);
+    const overlay = view.status === "ready" ? [h("h2", { key: "title" }, t.ready), h("p", { key: "rule" }, t.rule), primary(t.start, start)] : view.status === "countdown" ? [h("span", { className: "tf-game-countdown", key: "count", role: "status" }, view.countdown)] : view.status === "paused" ? [h("h2", { key: "title" }, t.paused), primary(t.resume, resume)] : view.status === "ended" ? [
+      h("h2", { key: "title" }, t.ended),
+      h("div", { className: "tf-game-result-score", key: "score" }, view.score),
+      h("div", { className: "tf-game-result-stats", key: "stats" }, stat(t.time, `${(view.time / 1e3).toFixed(1)}${language === "zh" ? " 秒" : "s"}`), stat(t.kills, view.kills), stat(t.bestCombo, view.bestCombo)),
+      primary(t.restart, restart, restartRef),
+      !records.saved ? h("p", { key: "save", role: "status" }, t.saveError) : null
+    ] : null;
+    return h(
+      "div",
+      { className: "tp-root tf-game-root", ref: rootRef, "data-platform": platform.id, "data-status": view.status, "data-compact": String(compact) },
+      h("div", { className: "tp-scroll" }, h(
+        "div",
+        { className: "tp-page tf-game-page" },
+        h(
+          "header",
+          { className: "tp-header" },
+          h(
+            "div",
+            { className: "tp-brand" },
+            h("span", { className: "tp-logo", "aria-hidden": true }, h("img", { src: platform.brandIconUrl || "/brand/icons/icon.svg", alt: "" })),
+            h("div", { className: "tp-brandtext" }, h("h1", { className: "tp-title" }, t.title), h("p", { className: "tp-subtitle" }, t.subtitle))
+          ),
+          Navigation ? h(Navigation, { disabled: live || composing, title: t.switchHint }) : null,
+          h(
+            "div",
+            { className: "tp-header-actions" },
+            h("button", {
+              className: "tp-btn tp-quiet",
+              type: "button",
+              disabled: !live || composing,
+              "aria-keyshortcuts": "Escape Control+P Meta+P",
+              onPointerDown: guardPointer,
+              onClick: pause
+            }, t.pause),
+            h("button", {
+              className: "tp-btn tp-quiet",
+              type: "button",
+              disabled: composing,
+              onPointerDown: guardPointer,
+              onClick: () => {
+                pause();
+                setSettingsOpen(true);
+                void audioRef.current.prepare();
+              }
+            }, t.settings)
+          )
+        ),
+        h(
+          "div",
+          { className: "tf-game-stats", role: "group", "aria-label": language === "zh" ? "游戏统计" : "Game statistics" },
+          h("div", { className: "tf-game-progress" }, stat(t.level, view.level), stat(t.combo, view.combo)),
+          h(
+            "div",
+            { className: "tf-game-stat tf-game-health", "aria-live": "polite" },
+            h("span", { className: "tf-game-stat-label" }, t.lives),
+            h(
+              "div",
+              { className: "tf-game-lives", role: "img", "data-low": String(view.lives <= 2), "aria-label": `${t.lives} ${view.lives} / 5` },
+              ...Array.from({ length: 5 }, (_, i) => h("i", { key: i, className: "tf-game-life", "data-lost": String(i >= view.lives), "aria-hidden": true }))
+            )
+          ),
+          h("div", { className: "tf-game-score" }, stat(t.score, view.score))
+        ),
+        h(
+          "div",
+          {
+            className: "tf-game-stage",
+            ref: stageRef,
+            "data-miss": String(missFlash),
+            onPointerDown: (event) => {
+              if (live) {
+                event.preventDefault();
+                focusInput();
+              }
+            }
+          },
+          ...view.targets.map((target) => {
+            return h(
+              "div",
+              {
+                key: target.id,
+                className: "tf-game-target",
+                "data-hit": String(target.status === "hit"),
+                ref: (node) => node ? targetNodes.current.set(target.id, node) : targetNodes.current.delete(target.id)
+              },
+              target.text
+            );
+          }),
+          ...view.shots.map((shot) => h("span", {
+            key: `shot-${shot.id}`,
+            className: "tf-game-shot",
+            "aria-hidden": true,
+            ref: (node) => node ? shotNodes.current.set(shot.id, node) : shotNodes.current.delete(shot.id)
+          })),
+          overlay ? h("div", { className: "tf-game-overlay" }, ...overlay) : null
+        ),
+        h(
+          "div",
+          { className: "tf-game-dock" },
+          h("div", { className: "tf-game-emitter", "aria-hidden": true }),
+          h("textarea", {
+            key: round,
+            className: "tf-game-input",
+            ref: inputRef,
+            rows: 1,
+            wrap: "off",
+            "aria-label": t.input,
+            "aria-describedby": "tf-game-input-hint tf-game-input-error",
+            "aria-invalid": view.error && !composing,
+            placeholder: t.placeholder,
+            autoComplete: "off",
+            autoCorrect: "off",
+            autoCapitalize: "off",
+            spellCheck: false,
+            maxLength: 32,
+            readOnly: ["paused", "ended"].includes(view.status) && !composing,
+            onCompositionStart: (event) => {
+              if (!currentEvent(event)) return;
+              bufferRef.current.begin();
+              setComposing(true);
+            },
+            onCompositionEnd: (event) => {
+              if (!currentEvent(event)) return;
+              bufferRef.current.end(event.currentTarget);
+              setComposing(false);
+            },
+            onInput: (event) => {
+              if (!currentEvent(event)) return;
+              bufferRef.current.input(event.currentTarget, event.nativeEvent);
+              if (bufferRef.current.composing) setComposing(true);
+            },
+            onKeyDown: (event) => {
+              if (!document.hidden && document.activeElement === event.currentTarget && ["running", "countdown"].includes(engineRef.current.state.status)) {
+                audioRef.current.key(event, event.nativeEvent, bufferRef.current.composing);
+              }
+              if (!bufferRef.current.composing && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && event.key === "Enter") event.preventDefault();
+            },
+            onFocus: () => {
+              void audioRef.current.prepare();
+            },
+            onPaste: (event) => event.preventDefault(),
+            onDrop: (event) => event.preventDefault(),
+            onBlur: pause
+          }),
+          h("p", { className: "tf-game-hint", id: "tf-game-input-error", "data-error": String(view.error && !composing), role: "status" }, view.error && !composing ? t.error : "")
+        ),
+        h("footer", { className: "tf-game-footer" }, h("span", { id: "tf-game-input-hint" }, t.hint), h("span", { className: "tf-game-summary" }, `${t.best} ${records.best} · ${Math.floor(view.time / 1e3)}${language === "zh" ? " 秒" : "s"}`))
+      )),
+      h(
+        "dialog",
+        { className: "tf-game-settings", ref: dialogRef, "aria-label": t.settings, onCancel: closeSettings, onClose: closeSettings },
+        h(
+          "div",
+          { className: "tf-game-settings-header" },
+          h("h2", null, t.settings),
+          h(
+            "button",
+            { className: "tp-btn tp-quiet", type: "button", "aria-label": t.close, onClick: closeSettings },
+            h("svg", { viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", strokeWidth: 1.8, "aria-hidden": true }, h("path", { d: "M5 5 19 19M19 5 5 19" }))
+          )
+        ),
+        audioControls("effects"),
+        audioControls("keyboard"),
+        h("p", { className: "tf-game-audio-status", role: "status" }, audioSaveError ? t.audioSaveError : audioPreferences.keyboard.enabled && audioStatus.keyboard === "error" || audioPreferences.effects.enabled && audioStatus.effects === "error" ? t.audioError : audioPreferences.keyboard.enabled && audioStatus.keyboard === "loading" ? t.audioLoading : ""),
+        Settings ? h(Settings, { language }) : null,
+        h(
+          "section",
+          { className: "tp-settings-section tf-game-rules", "aria-labelledby": "tf-game-rules-title" },
+          h("h3", { id: "tf-game-rules-title" }, t.gameplay),
+          h("p", null, t.gameplayHint),
+          h("p", null, t.matchingHint),
+          h("p", null, t.pauseHint),
+          h("p", null, t.levelHint)
+        )
+      )
+    );
+  };
+}
+
 // packages/dsh-plugin/src/theme.js
 var hostTheme = `.tp-root {
   --tf-bg-base: var(--dsw-alias-bg-base);
@@ -5208,6 +6587,7 @@ var hostTheme = `.tp-root {
   --tf-border-l1: var(--dsw-alias-border-l1);
   --tf-border-l2: var(--dsw-alias-border-l2);
   --tf-brand-primary: var(--dsw-alias-brand-primary);
+  --tf-on-brand: var(--dsw-alias-label-primary-foreground, #fff);
   --tf-brand-primary-new-colorprimary-new-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
   --tf-label-primary: var(--dsw-alias-label-primary);
   --tf-label-secondary: var(--dsw-alias-label-secondary);
@@ -5218,6 +6598,22 @@ var hostTheme = `.tp-root {
 .tp-logo img { width: 64px; height: 64px; max-width: none; flex: none; object-fit: contain; }
 .tp-settings-website { border-top: 0; padding-top: 0; }
 .tp-settings-website a { color: var(--tf-label-primary); text-decoration: underline; text-underline-offset: 3px; }
+.tp-root[data-platform="dsh"] { container: typefeel / inline-size; min-height: 0; }
+.tp-root[data-platform="dsh"] .tp-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+.tp-root[data-platform="dsh"] .tp-brand { min-width: 0; }
+.tp-root[data-platform="dsh"] .tf-mode-switch { justify-self: center; align-self: center; flex: none; margin: 0; }
+.tp-root[data-platform="dsh"] .tf-mode-switch .tp-seg-btn { min-height: 34px; padding-inline: 13px; }
+.tp-root[data-platform="dsh"] .tf-mode-switch .tp-seg-btn:disabled { cursor: default; opacity: .55; }
+.tp-root[data-platform="dsh"] .tp-header-actions { justify-self: end; justify-content: flex-end; min-width: 0; max-width: 100%; }
+@container typefeel (max-width: 800px) {
+  .tp-root[data-platform="dsh"] .tp-header { position: relative; display: flex; flex-wrap: wrap; padding-top: 52px; }
+  .tp-root[data-platform="dsh"] .tf-mode-switch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); }
+}
+@container typefeel (max-width: 600px) {
+  .tp-root[data-platform="dsh"] .tf-game-page { padding-inline: 20px; gap: 16px; }
+  .tp-root.tf-game-root[data-platform="dsh"] .tp-brandtext { display: none; }
+  .tp-root[data-platform="dsh"] .tf-game-progress { gap: 16px; }
+}
 `;
 
 // packages/dsh-plugin/icon.svg
@@ -5239,11 +6635,12 @@ function createPlugin(React, loadChunk) {
     );
   }
   return {
-    inject: ["slots"],
+    inject: ["slots", "locale"],
     apply(ctx) {
       const slots = ctx.get("slots");
       if (!slots) return;
       const locale = ctx.get("locale");
+      const { Context: ModeContext, Navigation } = createModeNavigation(React);
       let translate;
       if (locale) {
         try {
@@ -5256,7 +6653,9 @@ function createPlugin(React, loadChunk) {
         } catch {
         }
       }
-      const { TypingPage, PanelIcon, CSS: CSS2, t } = createPractice(React, {
+      const { TypingPage, PanelIcon, CSS: CSS3, t } = createPractice(React, {
+        id: "dsh",
+        Navigation,
         storagePrefix: "dsh.typing-practice",
         locale,
         translate,
@@ -5274,10 +6673,52 @@ function createPlugin(React, loadChunk) {
           return response.json();
         }
       });
+      const GamePage = createGamePage(React, {
+        id: "dsh",
+        layout: "container",
+        brandIconUrl: icon_default,
+        recordsKey: "dsh.typing-practice.game.records.v1",
+        audioKeys: { effects: "dsh.typing-practice.game.audio.v1", keyboard: "dsh.typing-practice.sound.v1" },
+        shortcuts: () => ctx.get("shortcuts")
+      });
+      let storage;
+      try {
+        storage = window.localStorage;
+      } catch {
+      }
+      function activeLanguage() {
+        try {
+          const snapshot = locale?.getLocale?.();
+          return String(snapshot?.active || snapshot?.id || snapshot?.locale || snapshot?.current || "").toLowerCase().startsWith("en") ? "en" : "zh";
+        } catch {
+          return "zh";
+        }
+      }
+      function TypefeelPage() {
+        const [mode, setMode] = React.useState("practice");
+        const [language, setLanguage] = React.useState(activeLanguage);
+        React.useEffect(() => {
+          try {
+            const dispose = locale?.subscribe?.(() => setLanguage(activeLanguage()));
+            return typeof dispose === "function" ? dispose : void 0;
+          } catch {
+          }
+        }, []);
+        return React.createElement(
+          ModeContext.Provider,
+          { value: { mode, setMode, language } },
+          mode === "game" ? React.createElement(GamePage, {
+            language,
+            storage,
+            Navigation,
+            loadAudio: () => loadChunk("./client.audio.js")
+          }) : React.createElement(TypingPage)
+        );
+      }
       ctx.effect(() => {
         const style = document.createElement("style");
         style.setAttribute("data-typing-practice-style", "");
-        style.textContent = CSS2 + hostTheme;
+        style.textContent = CSS3 + CSS2 + hostTheme;
         document.head.appendChild(style);
         return () => style.remove();
       });
@@ -5288,7 +6729,7 @@ function createPlugin(React, loadChunk) {
         label: () => t("panelLabel"),
         locale: "typing-practice"
       }, PanelIcon));
-      slots.inject("main", () => slots.register({ name: "main", key: "typing-practice" }, TypingPage));
+      slots.inject("main", () => slots.register({ name: "main", key: "typing-practice" }, TypefeelPage));
     }
   };
 }
